@@ -1,0 +1,135 @@
+# Disaster Intelligence Platform - Docker Compose
+version: '3.8'
+
+services:
+  # PostgreSQL Database with PostGIS
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: disaster-db
+    environment:
+      POSTGRES_USER: disaster
+      POSTGRES_PASSWORD: disaster
+      POSTGRES_DB: disaster_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U disaster -d disaster_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - disaster-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: disaster-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - disaster-network
+
+  # Backend API
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: disaster-backend
+    environment:
+      DATABASE_URL: postgresql://disaster:disaster@db:5432/disaster_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CORS_ORIGINS: '["http://localhost:5173", "http://localhost:3000"]'
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - disaster-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker
+  celery:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: disaster-celery
+    environment:
+      DATABASE_URL: postgresql://disaster:disaster@db:5432/disaster_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ../backend:/app
+    command: celery -A core.celery worker --loglevel=info
+    networks:
+      - disaster-network
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: disaster-celery-beat
+    environment:
+      DATABASE_URL: postgresql://disaster:disaster@db:5432/disaster_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ../backend:/app
+    command: celery -A core.celery beat --loglevel=info
+    networks:
+      - disaster-network
+
+  # Flower (Celery Monitoring)
+  flower:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: disaster-flower
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery
+    command: celery -A core.celery flower --port=5555
+    networks:
+      - disaster-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  disaster-network:
+    driver: bridge
