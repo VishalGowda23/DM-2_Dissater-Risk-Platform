@@ -1,0 +1,72 @@
+# Disaster Intelligence Platform - Production Docker Compose
+version: '3.8'
+
+services:
+  # PostgreSQL + PostGIS
+  db:
+    image: postgis/postgis:15-3.4
+    container_name: disaster-db
+    environment:
+      POSTGRES_USER: disaster
+      POSTGRES_PASSWORD: disaster
+      POSTGRES_DB: disaster_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U disaster -d disaster_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: disaster-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Backend API
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: disaster-api
+    environment:
+      DATABASE_URL: postgresql://disaster:disaster@db:5432/disaster_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production-to-a-random-64-char-string}
+      ENVIRONMENT: production
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - srtm_data:/app/data/srtm
+      - ml_data:/app/app/ml/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  srtm_data:
+  ml_data:
