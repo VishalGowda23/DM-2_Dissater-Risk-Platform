@@ -1,0 +1,210 @@
+INFO:     Will watch for changes in these directories: ['/Users/vishalgowda/Downloads/Pune Disaster Intelligence Platform/disaster-intelligence-platform/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [2814] using WatchFiles
+2026-02-21 10:58:21 | app.ml.model         | WARNING | XGBoost not installed. ML calibration will be disabled.
+2026-02-21 10:58:21 | app.ml.model         | WARNING | SHAP not installed. ML explainability will be limited.
+INFO:     Started server process [2820]
+INFO:     Waiting for application startup.
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | ============================================================
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | 🚀 Starting Disaster Intelligence Platform v2.0.0
+2026-02-21 10:58:21 | disaster-intelligence | INFO    |    Environment: production
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | ============================================================
+2026-02-21 10:58:21 | app.db.database      | INFO    | Initializing database...
+2026-02-21 10:58:21 | app.db.database      | INFO    | Database tables created successfully
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | ✅ Database initialized
+2026-02-21 10:58:21 | disaster-intelligence | WARNING | ⚠️ PostGIS not available (spatial queries will use fallback)
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | ✅ Redis connected
+2026-02-21 10:58:21 | app.ml.model         | WARNING | XGBoost not available, using fallback
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | ⚠️ ML model not found (using fallback risk estimation)
+2026-02-21 10:58:21 | app.services.ward_data_service | INFO    | Wards already initialized (20 wards)
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | ✅ Ward data: {'status': 'exists', 'count': 20}
+2026-02-21 10:58:21 | apscheduler.scheduler | INFO    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-21 10:58:21 | apscheduler.scheduler | INFO    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-21 10:58:21 | apscheduler.scheduler | INFO    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-21 10:58:21 | apscheduler.scheduler | INFO    | Added job "Weather Data Ingestion" to job store "default"
+2026-02-21 10:58:21 | apscheduler.scheduler | INFO    | Added job "Risk Score Recomputation" to job store "default"
+2026-02-21 10:58:21 | apscheduler.scheduler | INFO    | Added job "Old Data Cleanup" to job store "default"
+2026-02-21 10:58:21 | apscheduler.scheduler | INFO    | Scheduler started
+2026-02-21 10:58:21 | app.jobs.scheduler   | INFO    | 📅 Background scheduler started: weather every 15min, risk every 30min, cleanup at 2:00
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | ✅ Background scheduler started
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | ============================================================
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | 🟢 Platform ready
+2026-02-21 10:58:21 | disaster-intelligence | INFO    | ============================================================
+INFO:     Application startup complete.
+INFO:     127.0.0.1:49467 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49469 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49467 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49467 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49475 - "GET /api/explain/W004?hazard=flood HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49475 - "GET /api/risk/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49475 - "GET /api/risk/summary HTTP/1.1" 200 OK
+2026-02-21 10:58:45 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5308&longitude=73.8475&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:45 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5018&longitude=73.9256&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:45 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5074&longitude=73.8077&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:45 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.558&longitude=73.8077&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:47 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.458&longitude=73.8508&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:47 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.4719&longitude=73.8948&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:47 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.4874&longitude=73.8098&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:47 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.4828&longitude=73.8618&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:49 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5268&longitude=73.881&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:49 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5558&longitude=73.879&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:49 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.472&longitude=73.8273&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:49 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5578&longitude=73.9145&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:49538 - "GET /api/historical/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49538 - "GET /api/historical/events HTTP/1.1" 200 OK
+2026-02-21 10:58:50 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5155&longitude=73.8563&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:50 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5596&longitude=73.773&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:51 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.496&longitude=73.887&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:51 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5701&longitude=73.785&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:51 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.4952&longitude=73.8462&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:52 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5177&longitude=73.8407&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:52 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5318&longitude=73.93&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:52 | httpx                | INFO    | HTTP Request: GET https://api.open-meteo.com/v1/forecast?latitude=18.5508&longitude=73.9395&hourly=temperature_2m%2Crelative_humidity_2m%2Cprecipitation%2Crain%2Csurface_pressure%2Cwind_speed_10m%2Cwind_gusts_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata&forecast_days=7 "HTTP/1.1 200 OK"
+2026-02-21 10:58:52 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49487 - "GET /api/forecast HTTP/1.1" 200 OK
+2026-02-21 10:58:52 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49538 - "GET /api/forecast HTTP/1.1" 200 OK
+2026-02-21 10:58:55 | httpx                | INFO    | HTTP Request: GET https://archive-api.open-meteo.com/v1/archive?latitude=18.5204&longitude=73.8567&start_date=2019-09-22&end_date=2019-09-27&daily=temperature_2m_max%2Ctemperature_2m_min%2Ctemperature_2m_mean%2Cprecipitation_sum%2Crain_sum%2Cwind_speed_10m_max&timezone=Asia%2FKolkata "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:49487 - "POST /api/historical/validate/pune_2019_sep HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49556 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49556 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49558 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49558 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49560 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49560 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49560 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49560 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49560 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49560 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49560 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49565 - "GET /api/shelters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49564 - "GET /api/evacuation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49565 - "GET /api/shelters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49564 - "GET /api/evacuation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49567 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49567 - "GET /api/risk HTTP/1.1" 200 OK
+2026-02-21 11:00:52 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49580 - "GET /api/decision-support HTTP/1.1" 200 OK
+2026-02-21 11:00:52 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49580 - "GET /api/decision-support HTTP/1.1" 200 OK
+2026-02-21 11:00:57 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49580 - "GET /api/decision-support HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49583 - "GET /api/risk/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49583 - "GET /api/risk/summary HTTP/1.1" 200 OK
+2026-02-21 11:01:05 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49583 - "GET /api/forecast HTTP/1.1" 200 OK
+2026-02-21 11:01:05 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49583 - "GET /api/forecast HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49583 - "GET /api/historical/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49583 - "GET /api/historical/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49583 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49583 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49585 - "GET /api/shelters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49583 - "GET /api/evacuation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49585 - "GET /api/shelters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49583 - "GET /api/evacuation HTTP/1.1" 200 OK
+2026-02-21 11:01:08 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49583 - "GET /api/decision-support HTTP/1.1" 200 OK
+2026-02-21 11:01:08 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49583 - "GET /api/decision-support HTTP/1.1" 200 OK
+2026-02-21 11:01:23 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49589 - "GET /api/forecast HTTP/1.1" 200 OK
+2026-02-21 11:01:23 | app.services.weather_service | INFO    | Weather ingestion: 20 success, 0 failed
+INFO:     127.0.0.1:49589 - "GET /api/forecast HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49589 - "GET /api/historical/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49589 - "GET /api/historical/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49589 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49589 - "GET /api/alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49594 - "GET /api/shelters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49589 - "GET /api/evacuation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49594 - "GET /api/shelters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49589 - "GET /api/evacuation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49589 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49589 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49600 - "GET /api/explain/W004?hazard=flood HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49600 - "GET /api/explain/W004?hazard=flood HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49612 - "GET /api/explain/W004?hazard=flood HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49612 - "GET /api/explain/W004?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49616 - "GET /api/explain/W013?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49616 - "GET /api/explain/W018?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49618 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49618 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49618 - "GET /api/explain/W018?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49618 - "GET /api/explain/W013?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49618 - "GET /api/explain/W003?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49618 - "GET /api/explain/W019?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49618 - "GET /api/explain/W005?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49620 - "GET /api/explain/W003?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49622 - "GET /api/explain/W003?hazard=flood HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49622 - "GET /api/explain/W003?hazard=heat HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49622 - "GET /api/explain/W003?hazard=flood HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49632 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49632 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49632 - "GET /api/explain/W003?hazard=flood HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49638 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49638 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49638 - "GET /api/explain/W003?hazard=flood HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49646 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49648 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49648 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49646 - "GET /api/risk HTTP/1.1" 200 OK
+2026-02-21 11:19:01 | apscheduler.executors.default | WARNING | Run time of job "Weather Data Ingestion (trigger: interval[0:15:00], next run at: 2026-02-21 11:28:21 IST)" was missed by 0:05:39.713769
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.558, 73.8077): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5074, 73.8077): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5308, 73.8475): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5155, 73.8563): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5018, 73.9256): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.4719, 73.8948): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.4828, 73.8618): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.458, 73.8508): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.4874, 73.8098): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.472, 73.8273): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5578, 73.9145): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5558, 73.879): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.496, 73.887): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5268, 73.881): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5596, 73.773): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5701, 73.785): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.4952, 73.8462): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5508, 73.9395): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5177, 73.8407): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5318, 73.93): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | INFO    | Weather ingestion: 0 success, 20 failed
+INFO:     127.0.0.1:49656 - "GET /api/decision-support HTTP/1.1" 200 OK
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5074, 73.8077): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.558, 73.8077): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5308, 73.8475): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5155, 73.8563): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5018, 73.9256): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.4719, 73.8948): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.4828, 73.8618): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.458, 73.8508): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.472, 73.8273): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.4874, 73.8098): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5578, 73.9145): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5558, 73.879): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5268, 73.881): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.496, 73.887): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5596, 73.773): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5701, 73.785): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.4952, 73.8462): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5508, 73.9395): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5177, 73.8407): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | ERROR   | Weather API error for (18.5318, 73.93): [Errno 8] nodename nor servname provided, or not known
+2026-02-21 11:19:06 | app.services.weather_service | INFO    | Weather ingestion: 0 success, 20 failed
+INFO:     127.0.0.1:49656 - "GET /api/decision-support HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49658 - "GET /api/explain/W004?hazard=flood HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49664 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49664 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49664 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49664 - "GET /api/risk HTTP/1.1" 200 OK
+2026-02-21 11:38:51 | apscheduler.executors.default | WARNING | Run time of job "Weather Data Ingestion (trigger: interval[0:15:00], next run at: 2026-02-21 11:43:21 IST)" was missed by 0:10:30.085084
+2026-02-21 11:38:51 | apscheduler.executors.default | WARNING | Run time of job "Risk Score Recomputation (trigger: interval[0:30:00], next run at: 2026-02-21 11:58:21 IST)" was missed by 0:10:30.171878
+INFO:     127.0.0.1:49709 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49709 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49713 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49713 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49778 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49778 - "GET /api/risk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49826 - "GET /api/wards HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49826 - "GET /api/risk HTTP/1.1" 200 OK

@@ -26,6 +26,13 @@ from app.services.risk_engine.scenario import scenario_engine, ScenarioParameter
 from app.services.optimizer import resource_allocator
 from app.services.ward_data_service import initialize_wards, update_ward_osm_data
 from app.services.osm_service import osm_service
+from app.services.forecast_engine import forecast_engine
+from app.services.historical_validator import historical_validator
+from app.services.river_monitor import river_monitor
+from app.services.risk_engine.cascading_risk import cascading_engine
+from app.services.alert_service import alert_service
+from app.services.evacuation_router import evacuation_router
+from app.services.decision_support import decision_support
 
 logger = logging.getLogger(__name__)
 
@@ -456,16 +463,11 @@ async def list_scenarios():
 
 
 @scenario_router.post("/scenario/run")
+@scenario_router.post("/scenario")  # alias for frontend
 async def run_scenario(request: Dict[str, Any], db: Session = Depends(get_db)):
     """
     Run scenario simulation
-    
-    Body: {
-        "scenario_key": "heavy_rain",  // OR custom params:
-        "rain_multiplier": 2.5,
-        "temperature_increase": 3.0,
-        "infrastructure_failure_factor": 0.3
-    }
+    Handles both direct params and frontend nested custom_params format
     """
     wards = db.query(Ward).all()
     if not wards:
@@ -474,21 +476,119 @@ async def run_scenario(request: Dict[str, Any], db: Session = Depends(get_db)):
     scenario_key = request.get("scenario_key")
     custom_params = None
 
-    if not scenario_key:
+    # Handle frontend nested custom_params format
+    frontend_params = request.get("custom_params", {})
+
+    if scenario_key and scenario_key != "custom":
+        # Use a preset scenario
+        pass
+    else:
+        # Custom scenario — map frontend field names to backend field names
         custom_params = ScenarioParameters(
-            rain_multiplier=request.get("rain_multiplier", 1.0),
-            temperature_increase=request.get("temperature_increase", 0.0),
-            drainage_improvement=request.get("drainage_improvement", 0.0),
+            rain_multiplier=frontend_params.get("rainfall_multiplier",
+                request.get("rain_multiplier", 1.0)),
+            temperature_increase=frontend_params.get("temp_anomaly_addition",
+                request.get("temperature_increase", 0.0)),
+            drainage_improvement=frontend_params.get("drainage_efficiency_multiplier",
+                request.get("drainage_improvement", 0.0)),
             infrastructure_failure_factor=request.get("infrastructure_failure_factor", 0.0),
-            population_growth_pct=request.get("population_growth_pct", 0.0),
+            population_growth_pct=frontend_params.get("population_growth_pct",
+                request.get("population_growth_pct", 0.0)),
             custom_label=request.get("custom_label", "Custom Scenario"),
         )
+        # Treat drainage_efficiency_multiplier as relative to 1.0
+        # Frontend sends 0.5-1.5, we need 0-1 improvement value
+        de_mult = frontend_params.get("drainage_efficiency_multiplier", 1.0)
+        if de_mult > 1.0:
+            custom_params.drainage_improvement = de_mult - 1.0  # e.g 1.3 -> 0.3
+        elif de_mult < 1.0:
+            # Low efficiency = infrastructure failure effect
+            custom_params.infrastructure_failure_factor = max(
+                custom_params.infrastructure_failure_factor, 1.0 - de_mult
+            )
+            custom_params.drainage_improvement = 0.0
+
+        scenario_key = None  # ensure we use custom_params
 
     try:
-        result = scenario_engine.run_scenario_comparison(
+        raw_result = scenario_engine.run_scenario_comparison(
             wards, scenario_key=scenario_key, custom_params=custom_params
         )
-        return result
+
+        # Transform response to match frontend ScenarioResult type
+        ward_results = raw_result.get("ward_results", [])
+        results = []
+        total_flood_change = 0
+        total_heat_change = 0
+        newly_critical = 0
+
+        for wr in ward_results:
+            baseline_flood = wr["baseline"]["flood"]
+            baseline_heat = wr["baseline"]["heat"]
+            scenario_flood = wr["scenario_risk"]["flood"]
+            scenario_heat = wr["scenario_risk"]["heat"]
+
+            baseline_top = max(baseline_flood, baseline_heat)
+            scenario_top = max(scenario_flood, scenario_heat)
+
+            total_flood_change += wr["delta"]["flood"]
+            total_heat_change += wr["delta"]["heat"]
+            if scenario_top > 80 and baseline_top <= 80:
+                newly_critical += 1
+
+            results.append({
+                "baseline": {
+                    "ward_id": wr["ward_id"],
+                    "ward_name": wr["ward_name"],
+                    "population": 0,
+                    "centroid": {"lat": 0, "lon": 0},
+                    "flood": {
+                        "baseline": baseline_flood,
+                        "event": baseline_flood,
+                        "delta": 0, "delta_pct": 0,
+                    },
+                    "heat": {
+                        "baseline": baseline_heat,
+                        "event": baseline_heat,
+                        "delta": 0, "delta_pct": 0,
+                    },
+                    "top_hazard": "flood" if baseline_flood > baseline_heat else "heat",
+                    "top_risk_score": round(baseline_top, 2),
+                },
+                "scenario": {
+                    "ward_id": wr["ward_id"],
+                    "ward_name": wr["ward_name"],
+                    "population": 0,
+                    "centroid": {"lat": 0, "lon": 0},
+                    "flood": {
+                        "baseline": scenario_flood,
+                        "event": scenario_flood,
+                        "delta": wr["delta"]["flood"],
+                        "delta_pct": round(wr["delta"]["flood"] / max(baseline_flood, 0.01) * 100, 1),
+                    },
+                    "heat": {
+                        "baseline": scenario_heat,
+                        "event": scenario_heat,
+                        "delta": wr["delta"]["heat"],
+                        "delta_pct": round(wr["delta"]["heat"] / max(baseline_heat, 0.01) * 100, 1),
+                    },
+                    "top_hazard": "flood" if scenario_flood > scenario_heat else "heat",
+                    "top_risk_score": round(scenario_top, 2),
+                },
+            })
+
+        n = len(ward_results) or 1
+        return {
+            "scenario": raw_result.get("scenario", {}),
+            "results": sorted(results, key=lambda r: r["scenario"]["top_risk_score"], reverse=True),
+            "aggregate_impact": {
+                "avg_flood_risk_change": round(total_flood_change / n, 1),
+                "avg_heat_risk_change": round(total_heat_change / n, 1),
+                "wards_newly_critical": newly_critical,
+                "total_wards": n,
+            },
+            "timestamp": datetime.now().isoformat(),
+        }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -501,11 +601,7 @@ optimizer_router = APIRouter(prefix="/api", tags=["Resource Optimization"])
 async def optimize_resources(request: Dict[str, Any], db: Session = Depends(get_db)):
     """
     Optimize resource allocation based on current risk
-    
-    Body: {
-        "use_delta": true,
-        "resources": { ... }  // optional custom resources
-    }
+    Handles frontend format: { resources: { pumps: 25, ... }, scenario: { use_delta: true } }
     """
     from sqlalchemy import func
 
@@ -535,16 +631,125 @@ async def optimize_resources(request: Dict[str, Any], db: Session = Depends(get_
             "surge_alert": score.surge_alert,
             "flood_risk_delta_pct": score.flood_risk_delta_pct,
             "heat_risk_delta_pct": score.heat_risk_delta_pct,
+            "flood_risk": score.final_flood_risk or 0,
+            "heat_risk": score.final_heat_risk or 0,
         })
 
-    use_delta = request.get("use_delta", True)
-    custom_resources = request.get("resources")
+    # Handle frontend nested scenario.use_delta format
+    scenario_obj = request.get("scenario", {})
+    use_delta = scenario_obj.get("use_delta", request.get("use_delta", True))
 
+    # Map frontend resource keys to backend resource config
+    frontend_resources = request.get("resources", {})
+    RESOURCE_KEY_MAP = {
+        "pumps": "water_pumps",
+        "buses": "evacuation_buses",
+        "relief_camps": "relief_camps",
+        "cooling_centers": "cooling_centers",
+        "medical_units": "medical_units",
+    }
+
+    custom_resources = None
+    if frontend_resources:
+        from app.services.optimizer import DEFAULT_RESOURCES
+        custom_resources = {}
+        for fe_key, count in frontend_resources.items():
+            backend_key = RESOURCE_KEY_MAP.get(fe_key, fe_key)
+            if backend_key in DEFAULT_RESOURCES:
+                custom_resources[backend_key] = dict(DEFAULT_RESOURCES[backend_key])
+                custom_resources[backend_key]["total"] = count
+            else:
+                # Unknown resource type, create a generic config
+                custom_resources[backend_key] = {
+                    "name": fe_key.replace("_", " ").title(),
+                    "total": count,
+                    "unit": "units",
+                    "min_per_ward": 0,
+                    "min_for_critical": 1,
+                    "effectiveness": {"flood": 0.5, "heat": 0.5},
+                }
     result = resource_allocator.optimize_allocation(
         wards_data, resources=custom_resources, use_delta=use_delta
     )
 
-    return result
+    # Transform response to match frontend OptimizationResult interface
+    # Frontend expects: { ward_allocations, total_resources, total_allocated, summary, explanations }
+    raw_allocations = result.get("allocations", {})
+
+    # Build reverse key map for response
+    REVERSE_KEY_MAP = {
+        "water_pumps": "pumps",
+        "evacuation_buses": "buses",
+        "relief_camps": "relief_camps",
+        "cooling_centers": "cooling_centers",
+        "medical_units": "medical_units",
+    }
+
+    # Build total_resources and total_allocated dicts using frontend keys
+    total_resources = {}
+    total_allocated = {}
+    for backend_key, alloc_data in raw_allocations.items():
+        fe_key = REVERSE_KEY_MAP.get(backend_key, backend_key)
+        total_resources[fe_key] = alloc_data["total_available"]
+        total_allocated[fe_key] = alloc_data["total_allocated"]
+
+    # Build ward_allocations: merge per-resource allocations into per-ward view
+    ward_map = {}
+    for wd in wards_data:
+        ward_map[wd["ward_id"]] = {
+            "ward_id": wd["ward_id"],
+            "ward_name": wd["ward_name"],
+            "population": wd["population"],
+            "risk": {
+                "flood": round(wd.get("flood_risk", 0), 2),
+                "heat": round(wd.get("heat_risk", 0), 2),
+                "delta": round(abs(wd.get("flood_risk_delta_pct", 0) or 0), 2),
+            },
+            "need_score": round(wd.get("need_score", 0), 2),
+            "resources": {},
+        }
+
+    for backend_key, alloc_data in raw_allocations.items():
+        fe_key = REVERSE_KEY_MAP.get(backend_key, backend_key)
+        for wa in alloc_data.get("ward_allocations", []):
+            wid = wa["ward_id"]
+            if wid in ward_map:
+                ward_map[wid]["resources"][fe_key] = {
+                    "allocated": wa["allocated"],
+                    "need_score": wa["need_score"],
+                    "proportion": round(wa["allocated"] / max(alloc_data["total_available"], 1), 4),
+                    "is_critical": wa.get("risk_category") in ["critical", "high"],
+                }
+                # Update need_score from allocation
+                ward_map[wid]["need_score"] = max(ward_map[wid]["need_score"], wa["need_score"])
+
+    # Sort by need_score descending
+    ward_allocations = sorted(ward_map.values(), key=lambda w: w["need_score"], reverse=True)
+
+    # Find highest need ward
+    highest_need_ward = ward_allocations[0]["ward_id"] if ward_allocations else ""
+
+    # Convert explanations list to dict
+    raw_explanations = result.get("explanations", [])
+    explanations_dict = {}
+    for i, exp in enumerate(raw_explanations):
+        explanations_dict[f"rule_{i+1}"] = exp
+
+    raw_summary = result.get("summary", {})
+
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "scenario": {"use_delta": use_delta},
+        "total_resources": total_resources,
+        "total_allocated": total_allocated,
+        "ward_allocations": ward_allocations,
+        "explanations": explanations_dict,
+        "summary": {
+            "total_wards": raw_summary.get("total_wards", len(wards_data)),
+            "critical_wards": raw_summary.get("critical_wards", 0),
+            "highest_need_ward": highest_need_ward,
+        },
+    }
 
 
 # ==================== AUTH ROUTES ====================
@@ -651,3 +856,295 @@ async def get_audit_log(
         "page": pagination.page,
         "logs": [log.to_dict() for log in logs],
     }
+
+
+# ─── Feature: 48-Hour Temporal Forecasting ───────────────────────────────────
+forecast_router = APIRouter(prefix="/api", tags=["Temporal Forecasting"])
+
+
+@forecast_router.get("/forecast")
+async def get_all_forecasts(db: Session = Depends(get_db)):
+    """Get 48-hour risk forecast for all wards"""
+    wards = db.query(Ward).all()
+    if not wards:
+        return {"error": "No wards found", "forecasts": []}
+
+    # Fetch weather data for forecast
+    weather_service = WeatherIngestionService()
+    weather_result = await weather_service.ingest_for_wards(wards)
+    weather_map = weather_result.get("wards", {})
+
+    result = forecast_engine.compute_all_wards_forecast(wards, weather_map)
+    return result
+
+
+@forecast_router.get("/forecast/{ward_id}")
+async def get_ward_forecast(ward_id: str, db: Session = Depends(get_db)):
+    """Get detailed 48-hour forecast for a specific ward"""
+    ward = db.query(Ward).filter(Ward.ward_id == ward_id).first()
+    if not ward:
+        raise HTTPException(status_code=404, detail=f"Ward {ward_id} not found")
+
+    all_wards = db.query(Ward).all()
+
+    weather_service = WeatherIngestionService()
+    weather_result = await weather_service.ingest_for_wards([ward])
+    ward_weather = weather_result.get("wards", {}).get(ward_id)
+
+    result = forecast_engine.compute_ward_forecast(
+        ward, ward_weather, all_wards
+    )
+    return result
+
+
+# ─── Feature: Historical Event Validation ────────────────────────────────────
+historical_router = APIRouter(prefix="/api", tags=["Historical Validation"])
+
+
+@historical_router.get("/historical/events")
+async def get_historical_events():
+    """List all known disaster events available for validation"""
+    return {
+        "events": historical_validator.get_events(),
+        "total": len(historical_validator.get_events()),
+    }
+
+
+@historical_router.post("/historical/validate/{event_id}")
+async def validate_historical_event(event_id: str, db: Session = Depends(get_db)):
+    """Run model validation against a known historical disaster event"""
+    wards = db.query(Ward).all()
+    if not wards:
+        raise HTTPException(status_code=400, detail="No wards in database")
+
+    try:
+        result = await historical_validator.validate_event(event_id, wards)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Historical validation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Feature: River Level Monitoring ─────────────────────────────────────────
+river_router = APIRouter(prefix="/api", tags=["River Monitoring"])
+
+
+@river_router.get("/rivers")
+async def get_river_levels(db: Session = Depends(get_db)):
+    """Get current river levels for all CWC monitoring stations"""
+    # Get weather data for realistic simulation
+    wards = db.query(Ward).all()
+    weather_service = WeatherIngestionService()
+    weather_result = await weather_service.ingest_for_wards(wards)
+    weather_map = weather_result.get("wards", {})
+
+    return river_monitor.get_current_levels(weather_map)
+
+
+@river_router.get("/rivers/impact")
+async def get_river_impact(db: Session = Depends(get_db)):
+    """Get which wards are impacted by current river levels"""
+    wards = db.query(Ward).all()
+    weather_service = WeatherIngestionService()
+    weather_result = await weather_service.ingest_for_wards(wards)
+    weather_map = weather_result.get("wards", {})
+
+    levels = river_monitor.get_current_levels(weather_map)
+    return river_monitor.get_ward_impact(levels)
+
+
+# ─── Feature: Cascading / Compound Risk ──────────────────────────────────────
+cascade_router = APIRouter(prefix="/api", tags=["Cascading Risk"])
+
+
+@cascade_router.get("/cascading/chains")
+async def get_cascade_chains():
+    """List all defined cascade event chains"""
+    return {
+        "chains": cascading_engine.get_chains(),
+        "total": len(cascading_engine.get_chains()),
+    }
+
+
+@cascade_router.post("/cascading/evaluate")
+async def evaluate_cascade(
+    request: Dict[str, Any],
+    db: Session = Depends(get_db),
+):
+    """Evaluate a cascade chain for a specific ward or all wards"""
+    chain_id = request.get("chain_id")
+    ward_id = request.get("ward_id")
+
+    if not chain_id:
+        raise HTTPException(status_code=400, detail="chain_id required")
+
+    wards = db.query(Ward).all()
+
+    if ward_id:
+        ward = db.query(Ward).filter(Ward.ward_id == ward_id).first()
+        if not ward:
+            raise HTTPException(status_code=404, detail=f"Ward {ward_id} not found")
+        result = cascading_engine.evaluate_cascade_risk(
+            chain_id, ward, baseline_flood=50, baseline_heat=50
+        )
+    else:
+        result = cascading_engine.evaluate_all_cascades(wards)
+
+    return result
+
+
+# ─── Feature: Alert System ───────────────────────────────────────────────────
+alert_router = APIRouter(prefix="/api", tags=["Alert System"])
+
+
+@alert_router.get("/alerts")
+async def get_alerts(db: Session = Depends(get_db)):
+    """Generate and return current active alerts based on risk data"""
+    wards = db.query(Ward).all()
+    risk_data = []
+
+    for ward in wards:
+        scores = db.query(WardRiskScore).filter(
+            WardRiskScore.ward_id == ward.ward_id
+        ).order_by(WardRiskScore.timestamp.desc()).first()
+
+        if scores:
+            risk_data.append({
+                "ward_id": ward.ward_id,
+                "ward_name": ward.name,
+                "population": ward.population or 0,
+                "elderly_ratio": ward.elderly_ratio or 8,
+                "top_hazard": scores.top_hazard or "flood",
+                "top_risk_score": scores.final_combined_risk or 0,
+                "final_combined_risk": scores.final_combined_risk or 0,
+            })
+
+    return alert_service.generate_alerts(risk_data)
+
+
+@alert_router.post("/alerts/generate")
+async def generate_alerts(request: Dict[str, Any], db: Session = Depends(get_db)):
+    """Generate alerts with optional forecast and river data"""
+    wards = db.query(Ward).all()
+    risk_data = []
+
+    for ward in wards:
+        scores = db.query(WardRiskScore).filter(
+            WardRiskScore.ward_id == ward.ward_id
+        ).order_by(WardRiskScore.timestamp.desc()).first()
+
+        if scores:
+            risk_data.append({
+                "ward_id": ward.ward_id,
+                "ward_name": ward.name,
+                "population": ward.population or 0,
+                "elderly_ratio": ward.elderly_ratio or 8,
+                "top_hazard": scores.top_hazard or "flood",
+                "top_risk_score": scores.final_combined_risk or 0,
+                "final_combined_risk": scores.final_combined_risk or 0,
+            })
+
+    return alert_service.generate_alerts(risk_data)
+
+
+# ─── Feature: Evacuation Routing ─────────────────────────────────────────────
+evacuation_route_router = APIRouter(prefix="/api", tags=["Evacuation"])
+
+
+@evacuation_route_router.get("/shelters")
+async def get_shelters():
+    """List all shelter locations with capacity info"""
+    return {
+        "shelters": evacuation_router.get_shelters(),
+        "total": len(evacuation_router.get_shelters()),
+    }
+
+
+@evacuation_route_router.get("/evacuation/{ward_id}")
+async def get_evacuation_route(ward_id: str, db: Session = Depends(get_db)):
+    """Get optimal evacuation route for a specific ward"""
+    ward = db.query(Ward).filter(Ward.ward_id == ward_id).first()
+    if not ward:
+        raise HTTPException(status_code=404, detail=f"Ward {ward_id} not found")
+
+    # Get current risk for this ward
+    risk_score = db.query(WardRiskScore).filter(
+        WardRiskScore.ward_id == ward_id
+    ).order_by(WardRiskScore.timestamp.desc()).first()
+
+    risk_data = None
+    if risk_score:
+        risk_data = {
+            "top_risk_score": risk_score.final_combined_risk or 0,
+            "final_combined_risk": risk_score.final_combined_risk or 0,
+        }
+
+    return evacuation_router.compute_evacuation_route(ward, risk_data)
+
+
+@evacuation_route_router.get("/evacuation")
+async def get_all_evacuation_routes(db: Session = Depends(get_db)):
+    """Get evacuation routes for all wards"""
+    wards = db.query(Ward).all()
+    risk_map = {}
+
+    for ward in wards:
+        scores = db.query(WardRiskScore).filter(
+            WardRiskScore.ward_id == ward.ward_id
+        ).order_by(WardRiskScore.timestamp.desc()).first()
+        if scores:
+            risk_map[ward.ward_id] = {
+                "top_risk_score": scores.final_combined_risk or 0,
+                "final_combined_risk": scores.final_combined_risk or 0,
+            }
+
+    return evacuation_router.compute_all_routes(wards, risk_map)
+
+
+# ─── Feature: Decision Support ───────────────────────────────────────────────
+decision_router = APIRouter(prefix="/api", tags=["Decision Support"])
+
+
+@decision_router.get("/decision-support")
+async def get_decision_support(db: Session = Depends(get_db)):
+    """Get full decision support action plan"""
+    wards = db.query(Ward).all()
+
+    # Gather risk data
+    risk_data = []
+    for ward in wards:
+        scores = db.query(WardRiskScore).filter(
+            WardRiskScore.ward_id == ward.ward_id
+        ).order_by(WardRiskScore.timestamp.desc()).first()
+        if scores:
+            risk_data.append({
+                "ward_id": ward.ward_id,
+                "ward_name": ward.name,
+                "population": ward.population or 0,
+                "top_hazard": scores.top_hazard or "flood",
+                "top_risk_score": scores.final_combined_risk or 0,
+                "final_combined_risk": scores.final_combined_risk or 0,
+            })
+
+    # Try to get forecast data
+    forecast_data = None
+    try:
+        weather_service = WeatherIngestionService()
+        weather_result = await weather_service.ingest_for_wards(wards)
+        weather_map = weather_result.get("wards", {})
+        forecast_data = forecast_engine.compute_all_wards_forecast(wards, weather_map)
+    except Exception as e:
+        logger.warning(f"Forecast data unavailable for decision support: {e}")
+
+    # Try to get river data
+    river_data = None
+    try:
+        river_data = river_monitor.get_current_levels()
+    except Exception as e:
+        logger.warning(f"River data unavailable for decision support: {e}")
+
+    return decision_support.generate_action_plan(
+        risk_data, forecast_data, river_data
+    )

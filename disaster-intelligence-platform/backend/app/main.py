@@ -114,7 +114,9 @@ app.add_middleware(
 # Mount all API routes
 from app.api.routes import (
     health_router, ward_router, risk_router, compute_router,
-    scenario_router, optimizer_router, auth_router, admin_router
+    scenario_router, optimizer_router, auth_router, admin_router,
+    forecast_router, historical_router, river_router, cascade_router,
+    alert_router, evacuation_route_router, decision_router,
 )
 
 app.include_router(health_router)
@@ -125,6 +127,13 @@ app.include_router(scenario_router)
 app.include_router(optimizer_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(forecast_router)
+app.include_router(historical_router)
+app.include_router(river_router)
+app.include_router(cascade_router)
+app.include_router(alert_router)
+app.include_router(evacuation_route_router)
+app.include_router(decision_router)
 
 # Export for uvicorn
 if __name__ == "__main__":
