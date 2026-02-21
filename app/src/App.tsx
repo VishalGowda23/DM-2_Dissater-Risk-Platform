@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, Droplets, Activity, Map as MapIcon, BarChart3, Settings } from 'lucide-react';
+import { AlertTriangle, Droplets, Activity, Map as MapIcon, BarChart3, Settings, Clock, History, Bell, Navigation, Target } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
@@ -11,8 +11,13 @@ import WardDetail from './components/WardDetail';
 import RiskSummary from './components/RiskSummary';
 import ResourceOptimizer from './components/ResourceOptimizer';
 import ScenarioSimulator from './components/ScenarioSimulator';
+import ForecastTimeline from './components/ForecastTimeline';
+import HistoricalValidation from './components/HistoricalValidation';
+import AlertPanel from './components/AlertPanel';
+import EvacuationMap from './components/EvacuationMap';
+import DecisionSupport from './components/DecisionSupport';
 import { API_BASE_URL, type Ward, type RiskData } from './lib/types';
-import './App.css';
+
 
 function App() {
   const [selectedWard, setSelectedWard] = useState<Ward | null>(null);
@@ -32,18 +37,18 @@ function App() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch wards
       const wardsRes = await fetch(`${API_BASE_URL}/api/wards`);
       const wardsData = await wardsRes.json();
       setWards(wardsData.wards);
-      
+
       // Fetch risk data
       const riskRes = await fetch(`${API_BASE_URL}/api/risk`);
       const riskJson = await riskRes.json();
       setRiskData(riskJson.risk_data);
       setLastUpdated(riskJson.timestamp);
-      
+
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to fetch data from server');
@@ -104,7 +109,7 @@ function App() {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-sm">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -115,18 +120,18 @@ function App() {
                   </span>
                 )}
               </div>
-              
+
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={handleRefresh}
                   className="border-2 border-black rounded-none font-bold hover:bg-black hover:text-white"
                 >
                   Refresh
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={handleTriggerIngestion}
                   className="border-2 border-black rounded-none font-bold hover:bg-black hover:text-white"
@@ -134,8 +139,8 @@ function App() {
                   <Droplets className="w-4 h-4 mr-1" />
                   Ingest
                 </Button>
-                <Button 
-                  variant="default" 
+                <Button
+                  variant="default"
                   size="sm"
                   onClick={handleCalculateRisks}
                   className="bg-black text-white rounded-none font-bold hover:bg-gray-800"
@@ -153,33 +158,68 @@ function App() {
       <main className="max-w-[1920px] mx-auto p-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="bg-white border-2 border-black rounded-none p-1 gap-1">
-            <TabsTrigger 
-              value="map" 
+            <TabsTrigger
+              value="map"
               className="rounded-none data-[state=active]:bg-black data-[state=active]:text-white font-bold"
             >
               <MapIcon className="w-4 h-4 mr-2" />
               Risk Map
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="summary"
               className="rounded-none data-[state=active]:bg-black data-[state=active]:text-white font-bold"
             >
               <BarChart3 className="w-4 h-4 mr-2" />
               Summary
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="optimizer"
               className="rounded-none data-[state=active]:bg-black data-[state=active]:text-white font-bold"
             >
               <Settings className="w-4 h-4 mr-2" />
               Optimizer
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="scenarios"
               className="rounded-none data-[state=active]:bg-black data-[state=active]:text-white font-bold"
             >
               <Activity className="w-4 h-4 mr-2" />
               Scenarios
+            </TabsTrigger>
+            <TabsTrigger
+              value="forecast"
+              className="rounded-none data-[state=active]:bg-black data-[state=active]:text-white font-bold"
+            >
+              <Clock className="w-4 h-4 mr-2" />
+              Forecast
+            </TabsTrigger>
+            <TabsTrigger
+              value="historical"
+              className="rounded-none data-[state=active]:bg-black data-[state=active]:text-white font-bold"
+            >
+              <History className="w-4 h-4 mr-2" />
+              Validation
+            </TabsTrigger>
+            <TabsTrigger
+              value="alerts"
+              className="rounded-none data-[state=active]:bg-black data-[state=active]:text-white font-bold"
+            >
+              <Bell className="w-4 h-4 mr-2" />
+              Alerts
+            </TabsTrigger>
+            <TabsTrigger
+              value="evacuation"
+              className="rounded-none data-[state=active]:bg-black data-[state=active]:text-white font-bold"
+            >
+              <Navigation className="w-4 h-4 mr-2" />
+              Evacuation
+            </TabsTrigger>
+            <TabsTrigger
+              value="command"
+              className="rounded-none data-[state=active]:bg-black data-[state=active]:text-white font-bold"
+            >
+              <Target className="w-4 h-4 mr-2" />
+              Command
             </TabsTrigger>
           </TabsList>
 
@@ -191,8 +231,8 @@ function App() {
                   <h2 className="font-black uppercase tracking-wider">Ward Rankings</h2>
                 </div>
                 <div className="flex-1 overflow-auto">
-                  <WardList 
-                    riskData={riskData} 
+                  <WardList
+                    riskData={riskData}
                     wards={wards}
                     selectedWard={selectedWard}
                     onSelectWard={setSelectedWard}
@@ -202,7 +242,7 @@ function App() {
 
               {/* Center Panel - Map */}
               <div className="col-span-6 bg-white border-2 border-black overflow-hidden">
-                <RiskMap 
+                <RiskMap
                   riskData={riskData}
                   wards={wards}
                   selectedWard={selectedWard}
@@ -216,7 +256,7 @@ function App() {
                   <h2 className="font-black uppercase tracking-wider">Ward Details</h2>
                 </div>
                 <div className="flex-1 overflow-auto p-4">
-                  <WardDetail 
+                  <WardDetail
                     ward={selectedWard}
                     riskData={riskData.find(r => r.ward_id === selectedWard?.ward_id)}
                   />
@@ -235,6 +275,26 @@ function App() {
 
           <TabsContent value="scenarios" className="mt-0">
             <ScenarioSimulator riskData={riskData} wards={wards} />
+          </TabsContent>
+
+          <TabsContent value="forecast" className="mt-0">
+            <ForecastTimeline riskData={riskData} wards={wards} />
+          </TabsContent>
+
+          <TabsContent value="historical" className="mt-0">
+            <HistoricalValidation riskData={riskData} wards={wards} />
+          </TabsContent>
+
+          <TabsContent value="alerts" className="mt-0">
+            <AlertPanel riskData={riskData} wards={wards} />
+          </TabsContent>
+
+          <TabsContent value="evacuation" className="mt-0">
+            <EvacuationMap riskData={riskData} wards={wards} />
+          </TabsContent>
+
+          <TabsContent value="command" className="mt-0">
+            <DecisionSupport riskData={riskData} wards={wards} />
           </TabsContent>
         </Tabs>
       </main>

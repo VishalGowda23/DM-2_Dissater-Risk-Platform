@@ -22,7 +22,7 @@ export default function WardDetail({ ward, riskData }: WardDetailProps) {
 
   const fetchExplanation = async (hazard: 'flood' | 'heat') => {
     if (!ward) return;
-    
+
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/explain/${ward.ward_id}?hazard=${hazard}`);
@@ -66,9 +66,9 @@ export default function WardDetail({ ward, riskData }: WardDetailProps) {
             )}
           </div>
           <div className="text-right">
-            <div 
+            <div
               className="text-3xl font-black px-3 py-1"
-              style={{ 
+              style={{
                 backgroundColor: getRiskColor(riskData?.top_risk_score || 0),
                 color: (riskData?.top_risk_score || 0) > 60 ? 'white' : 'black'
               }}
@@ -80,7 +80,7 @@ export default function WardDetail({ ward, riskData }: WardDetailProps) {
             </p>
           </div>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-2 mt-4 text-sm">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-gray-500" />
@@ -111,9 +111,8 @@ export default function WardDetail({ ward, riskData }: WardDetailProps) {
           variant={activeHazard === 'flood' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setActiveHazard('flood')}
-          className={`flex-1 rounded-none font-bold ${
-            activeHazard === 'flood' ? 'bg-blue-600' : 'border-blue-600 text-blue-600'
-          }`}
+          className={`flex-1 rounded-none font-bold ${activeHazard === 'flood' ? 'bg-blue-600' : 'border-blue-600 text-blue-600'
+            }`}
         >
           <Droplets className="w-4 h-4 mr-1" />
           Flood
@@ -127,9 +126,8 @@ export default function WardDetail({ ward, riskData }: WardDetailProps) {
           variant={activeHazard === 'heat' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setActiveHazard('heat')}
-          className={`flex-1 rounded-none font-bold ${
-            activeHazard === 'heat' ? 'bg-orange-600' : 'border-orange-600 text-orange-600'
-          }`}
+          className={`flex-1 rounded-none font-bold ${activeHazard === 'heat' ? 'bg-orange-600' : 'border-orange-600 text-orange-600'
+            }`}
         >
           <Thermometer className="w-4 h-4 mr-1" />
           Heat
@@ -148,7 +146,7 @@ export default function WardDetail({ ward, riskData }: WardDetailProps) {
             <Activity className="w-4 h-4" />
             Risk Comparison
           </h3>
-          
+
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-sm mb-1">
@@ -156,37 +154,34 @@ export default function WardDetail({ ward, riskData }: WardDetailProps) {
                 <span className="font-mono font-bold">{activeRisk.baseline?.toFixed(1)}%</span>
               </div>
               <div className="h-3 bg-gray-200 overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-gray-500 transition-all"
                   style={{ width: `${activeRisk.baseline}%` }}
                 />
               </div>
             </div>
-            
+
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-600">Event (Current)</span>
                 <span className="font-mono font-bold">{activeRisk.event?.toFixed(1)}%</span>
               </div>
               <div className="h-3 bg-gray-200 overflow-hidden">
-                <div 
-                  className={`h-full transition-all ${
-                    activeHazard === 'flood' ? 'bg-blue-500' : 'bg-orange-500'
-                  }`}
+                <div
+                  className={`h-full transition-all ${activeHazard === 'flood' ? 'bg-blue-500' : 'bg-orange-500'
+                    }`}
                   style={{ width: `${activeRisk.event}%` }}
                 />
               </div>
             </div>
-            
+
             <div className="flex items-center justify-between pt-2 border-t">
               <span className="text-sm text-gray-600">Delta</span>
               <div className="flex items-center gap-2">
-                <TrendingUp className={`w-4 h-4 ${
-                  activeRisk.delta > 0 ? 'text-red-500' : 'text-green-500'
-                }`} />
-                <span className={`font-mono font-bold ${
-                  activeRisk.delta > 0 ? 'text-red-600' : 'text-green-600'
-                }`}>
+                <TrendingUp className={`w-4 h-4 ${activeRisk.delta > 0 ? 'text-red-500' : 'text-green-500'
+                  }`} />
+                <span className={`font-mono font-bold ${activeRisk.delta > 0 ? 'text-red-600' : 'text-green-600'
+                  }`}>
                   {activeRisk.delta > 0 ? '+' : ''}{activeRisk.delta?.toFixed(1)}%
                 </span>
                 <span className="text-xs text-gray-500">
@@ -205,28 +200,25 @@ export default function WardDetail({ ward, riskData }: WardDetailProps) {
             <Info className="w-4 h-4" />
             Risk Explanation
           </h3>
-          
+
           {explanation.surge_level !== 'normal' && (
-            <div className={`p-3 mb-3 ${
-              explanation.surge_level === 'critical' 
-                ? 'bg-red-100 border-red-500' 
+            <div className={`p-3 mb-3 ${explanation.surge_level === 'critical'
+                ? 'bg-red-100 border-red-500'
                 : 'bg-yellow-100 border-yellow-500'
-            } border-2`}>
+              } border-2`}>
               <div className="flex items-center gap-2">
-                <AlertTriangle className={`w-5 h-5 ${
-                  explanation.surge_level === 'critical' ? 'text-red-600' : 'text-yellow-600'
-                }`} />
-                <span className={`font-bold ${
-                  explanation.surge_level === 'critical' ? 'text-red-600' : 'text-yellow-600'
-                }`}>
+                <AlertTriangle className={`w-5 h-5 ${explanation.surge_level === 'critical' ? 'text-red-600' : 'text-yellow-600'
+                  }`} />
+                <span className={`font-bold ${explanation.surge_level === 'critical' ? 'text-red-600' : 'text-yellow-600'
+                  }`}>
                   {explanation.surge_description}
                 </span>
               </div>
             </div>
           )}
-          
+
           <p className="text-sm mb-4">{explanation.narrative}</p>
-          
+
           {explanation.top_drivers_event?.length > 0 && (
             <div>
               <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">
@@ -244,7 +236,7 @@ export default function WardDetail({ ward, riskData }: WardDetailProps) {
                         <span className="font-mono">{factor.contribution?.toFixed(1)}%</span>
                       </div>
                       <div className="h-2 bg-gray-200 overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-black transition-all"
                           style={{ width: `${factor.contribution}%` }}
                         />

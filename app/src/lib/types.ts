@@ -194,3 +194,117 @@ export function getRiskBgColor(risk: number): string {
   if (risk <= 80) return 'bg-orange-100 border-orange-500';
   return 'bg-red-100 border-red-500';
 }
+
+// ─── Forecast Types ─────────────────────────────────────────────────────────
+export interface ForecastTimepoint {
+  hour: number;
+  timestamp: string;
+  flood_risk: number;
+  heat_risk: number;
+  combined_risk: number;
+  alert_level: string;
+  rainfall_mm: number;
+  temperature_c: number;
+}
+
+export interface WardForecast {
+  ward_id: string;
+  ward_name: string;
+  population: number;
+  centroid: { lat: number; lon: number };
+  baseline: { flood: number; heat: number };
+  timeline: ForecastTimepoint[];
+  peak: { risk: number; hour: number; timestamp: string; hazard: string };
+  time_to_critical: number | null;
+  trend: string;
+  current_alert: string;
+  max_alert: string;
+}
+
+// ─── Historical Types ───────────────────────────────────────────────────────
+export interface HistoricalEvent {
+  event_id: string;
+  name: string;
+  date: string;
+  end_date: string;
+  event_type: string;
+  severity: string;
+  description: string;
+  affected_wards: string[];
+  actual_damage: Record<string, number | boolean | string>;
+  source: string;
+}
+
+export interface WardPrediction {
+  ward_id: string;
+  ward_name: string;
+  baseline_risk: number;
+  predicted_risk: number;
+  actually_affected: boolean;
+  model_flagged: boolean;
+  classification: string;
+  risk_category: string;
+}
+
+// ─── River Types ────────────────────────────────────────────────────────────
+export interface RiverStation {
+  station_id: string;
+  name: string;
+  river: string;
+  lat: number;
+  lon: number;
+  danger_level_m: number;
+  warning_level_m: number;
+  normal_level_m: number;
+  nearby_wards: string[];
+}
+
+// ─── Alert Types ────────────────────────────────────────────────────────────
+export interface Alert {
+  alert_id: string;
+  ward_id: string;
+  ward_name: string;
+  alert_type: string;
+  priority: string;
+  hazard: string;
+  risk_score: number;
+  title_en: string;
+  message_en: string;
+  title_mr: string;
+  message_mr: string;
+  actions: string[];
+  shelter_info: Record<string, unknown> | null;
+  timestamp: string;
+  channel: string;
+}
+
+// ─── Evacuation Types ───────────────────────────────────────────────────────
+export interface Shelter {
+  id: string;
+  name: string;
+  type: string;
+  lat: number;
+  lon: number;
+  capacity: number;
+  ward_id: string;
+  facilities: string[];
+  icon: string;
+}
+
+// ─── Decision Support Types ─────────────────────────────────────────────────
+export interface ActionItem {
+  action_id: string;
+  priority: string;
+  category: string;
+  ward_id: string;
+  ward_name: string;
+  title: string;
+  description: string;
+  justification: string;
+  resources_needed: { type: string; count: number }[];
+  estimated_impact: string;
+  status: string;
+  assigned_to: string;
+  deadline: string;
+}
+

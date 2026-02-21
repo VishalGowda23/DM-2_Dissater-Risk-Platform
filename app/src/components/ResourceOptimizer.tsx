@@ -22,7 +22,7 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
     cooling_centers: 20,
     medical_units: 8,
   });
-  
+
   const [useDelta, setUseDelta] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<OptimizationResult | null>(null);
@@ -38,7 +38,7 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
           scenario: { use_delta: useDelta }
         })
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setResult(data);
@@ -114,7 +114,7 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
                 Use Risk Delta for allocation (prioritize surging wards)
               </Label>
             </div>
-            
+
             <Button
               onClick={handleOptimize}
               disabled={loading}

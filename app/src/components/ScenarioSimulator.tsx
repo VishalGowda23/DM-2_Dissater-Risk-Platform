@@ -18,7 +18,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
   const [tempAnomaly, setTempAnomaly] = useState(0);
   const [drainageEfficiency, setDrainageEfficiency] = useState(1.0);
   const [populationGrowth, setPopulationGrowth] = useState(0);
-  
+
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScenarioResult | null>(null);
 
@@ -38,7 +38,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
           }
         })
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setResult(data);
@@ -63,7 +63,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
 
   const getScenarioChartData = () => {
     if (!result?.results) return [];
-    
+
     return result.results.slice(0, 10).map(item => ({
       name: item.baseline.ward_name,
       baseline: item.baseline.top_risk_score,
@@ -211,48 +211,42 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
         <div className="space-y-6">
           {/* Impact Summary */}
           <div className="grid grid-cols-4 gap-4">
-            <Card className={`border-2 rounded-none ${
-              result.aggregate_impact.avg_flood_risk_change > 10 
-                ? 'border-red-500 bg-red-50' 
+            <Card className={`border-2 rounded-none ${result.aggregate_impact.avg_flood_risk_change > 10
+                ? 'border-red-500 bg-red-50'
                 : 'border-black'
-            }`}>
+              }`}>
               <CardContent className="pt-6">
                 <div className="text-sm text-gray-500 uppercase font-bold">Flood Risk Change</div>
-                <div className={`text-3xl font-black ${
-                  result.aggregate_impact.avg_flood_risk_change > 10 ? 'text-red-600' : ''
-                }`}>
+                <div className={`text-3xl font-black ${result.aggregate_impact.avg_flood_risk_change > 10 ? 'text-red-600' : ''
+                  }`}>
                   {result.aggregate_impact.avg_flood_risk_change > 0 ? '+' : ''}
                   {result.aggregate_impact.avg_flood_risk_change.toFixed(1)}%
                 </div>
               </CardContent>
             </Card>
 
-            <Card className={`border-2 rounded-none ${
-              result.aggregate_impact.avg_heat_risk_change > 10 
-                ? 'border-orange-500 bg-orange-50' 
+            <Card className={`border-2 rounded-none ${result.aggregate_impact.avg_heat_risk_change > 10
+                ? 'border-orange-500 bg-orange-50'
                 : 'border-black'
-            }`}>
+              }`}>
               <CardContent className="pt-6">
                 <div className="text-sm text-gray-500 uppercase font-bold">Heat Risk Change</div>
-                <div className={`text-3xl font-black ${
-                  result.aggregate_impact.avg_heat_risk_change > 10 ? 'text-orange-600' : ''
-                }`}>
+                <div className={`text-3xl font-black ${result.aggregate_impact.avg_heat_risk_change > 10 ? 'text-orange-600' : ''
+                  }`}>
                   {result.aggregate_impact.avg_heat_risk_change > 0 ? '+' : ''}
                   {result.aggregate_impact.avg_heat_risk_change.toFixed(1)}%
                 </div>
               </CardContent>
             </Card>
 
-            <Card className={`border-2 rounded-none ${
-              result.aggregate_impact.wards_newly_critical > 0 
-                ? 'border-red-500 bg-red-50' 
+            <Card className={`border-2 rounded-none ${result.aggregate_impact.wards_newly_critical > 0
+                ? 'border-red-500 bg-red-50'
                 : 'border-black'
-            }`}>
+              }`}>
               <CardContent className="pt-6">
                 <div className="text-sm text-gray-500 uppercase font-bold">Newly Critical Wards</div>
-                <div className={`text-3xl font-black ${
-                  result.aggregate_impact.wards_newly_critical > 0 ? 'text-red-600' : ''
-                }`}>
+                <div className={`text-3xl font-black ${result.aggregate_impact.wards_newly_critical > 0 ? 'text-red-600' : ''
+                  }`}>
                   {result.aggregate_impact.wards_newly_critical}
                 </div>
               </CardContent>
@@ -269,21 +263,21 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
           </div>
 
           {/* Impact Alert */}
-          {(result.aggregate_impact.avg_flood_risk_change > 10 || 
+          {(result.aggregate_impact.avg_flood_risk_change > 10 ||
             result.aggregate_impact.avg_heat_risk_change > 10) && (
-            <div className="bg-red-100 border-2 border-red-500 p-4">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="w-8 h-8 text-red-600" />
-                <div>
-                  <h3 className="font-bold text-red-600 uppercase">High Impact Scenario</h3>
-                  <p className="text-sm text-red-700">
-                    This scenario shows significant risk increases. Consider pre-positioning resources 
-                    and activating emergency protocols.
-                  </p>
+              <div className="bg-red-100 border-2 border-red-500 p-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-8 h-8 text-red-600" />
+                  <div>
+                    <h3 className="font-bold text-red-600 uppercase">High Impact Scenario</h3>
+                    <p className="text-sm text-red-700">
+                      This scenario shows significant risk increases. Consider pre-positioning resources
+                      and activating emergency protocols.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Comparison Chart */}
           <Card className="border-2 border-black rounded-none">
@@ -328,14 +322,14 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
                       {result.results.map(({ baseline, scenario }) => {
                         const change = scenario.top_risk_score - baseline.top_risk_score;
                         const isCritical = scenario.top_risk_score > 80 && baseline.top_risk_score <= 80;
-                        
+
                         return (
                           <tr key={baseline.ward_id} className="border-b border-gray-200">
                             <td className="py-3 px-4 font-medium">{baseline.ward_name}</td>
                             <td className="py-3 px-4 text-right">
-                              <span 
+                              <span
                                 className="px-2 py-1 font-bold"
-                                style={{ 
+                                style={{
                                   backgroundColor: getRiskColor(baseline.top_risk_score),
                                   color: baseline.top_risk_score > 60 ? 'white' : 'black'
                                 }}
@@ -344,9 +338,9 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
                               </span>
                             </td>
                             <td className="py-3 px-4 text-right">
-                              <span 
+                              <span
                                 className="px-2 py-1 font-bold"
-                                style={{ 
+                                style={{
                                   backgroundColor: getRiskColor(scenario.top_risk_score),
                                   color: scenario.top_risk_score > 60 ? 'white' : 'black'
                                 }}
