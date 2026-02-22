@@ -270,6 +270,9 @@ export const translations = {
     alertWarning: 'WARNING',
     alertWatch: 'WATCH',
     alertAdvisory: 'ADVISORY',
+    sendToPhone: 'Send to Phone',
+    alertLangLabel: 'Language',
+    messageSentSuccess: 'Message sent successfully!',
 
     // ── Decision Support extended ─────────────────────────────────────────────
     decisionSupportSubtitle: 'Decision Support System — Pune Municipal Corporation',
@@ -668,6 +671,9 @@ export const translations = {
     alertWarning: 'चेतावनी',
     alertWatch: 'निगरानी',
     alertAdvisory: 'सलाह',
+    sendToPhone: 'फ़ोन पर भेजें',
+    alertLangLabel: 'भाषा',
+    messageSentSuccess: 'संदेश सफलतापूर्वक भेजा गया!',
 
     // ── Decision Support extended ─────────────────────────────────────────────
     decisionSupportSubtitle: 'निर्णय समर्थन प्रणाली — पुणे महानगरपालिका',
@@ -1067,6 +1073,9 @@ export const translations = {
     alertWarning: 'इशारा',
     alertWatch: 'निरीक्षण',
     alertAdvisory: 'सल्ला',
+    sendToPhone: 'फोनवर पाठवा',
+    alertLangLabel: 'भाषा',
+    messageSentSuccess: 'संदेश यशस्वीरित्या पाठवला!',
 
     // ── Decision Support extended ─────────────────────────────────────────────
     decisionSupportSubtitle: 'निर्णय समर्थन प्रणाली — पुणे महानगरपालिका',

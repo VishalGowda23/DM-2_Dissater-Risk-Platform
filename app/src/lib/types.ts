@@ -315,6 +315,8 @@ export interface Alert {
   shelter_info: Record<string, unknown> | null;
   timestamp: string;
   channel: string;
+  population?: number;
+  elderly_pct?: number;
   evacuation_route?: {
     recommended_shelter: {
       name: string;

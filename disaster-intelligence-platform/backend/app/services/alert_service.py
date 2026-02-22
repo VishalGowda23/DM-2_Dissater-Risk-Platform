@@ -32,6 +32,8 @@ class Alert:
     expires_at: str
     channel: str             # sms, whatsapp, push
     evacuation_route: Optional[Dict] = field(default=None)
+    population: Optional[int] = field(default=None)
+    elderly_pct: Optional[float] = field(default=None)
 
 
 # Shelter data for Pune wards
@@ -240,71 +242,135 @@ class AlertService:
         forecast_info: Optional[Dict], ward_risk: Dict,
         evac_route: Optional[Dict] = None
     ) -> Alert:
-        """Generate authority/PMC-facing alert with deployment recommendations"""
+        """Generate authority/PMC-facing alert with full operational detail."""
         self.alert_counter += 1
-        
+
         pop = ward_risk.get("population", 100000)
         elderly_pct = ward_risk.get("elderly_ratio", 8)
         elderly_count = int(pop * elderly_pct / 100) if elderly_pct else int(pop * 0.08)
-        
+        drainage = ward_risk.get("drainage_index", 0.5)
+        elevation = ward_risk.get("elevation_m", 560)
+        prio_label = priority.upper()
+
+        # ── Shelter block ────────────────────────────────────────────
+        shelter_name = shelter["name"] if shelter else "N/A"
+        shelter_cap = shelter["capacity"] if shelter else "N/A"
+
+        # ── Evacuation block ─────────────────────────────────────────
+        evac_en = ""
+        evac_mr = ""
+        if evac_route:
+            best = evac_route.get("recommended_shelter", {})
+            if best:
+                safety = evac_route.get("route_safety", {}).get("status", "safe")
+                avoid = evac_route.get("route_safety", {}).get("avoid_roads", [])
+                facilities = ", ".join(best.get("facilities", []))
+                evac_en = (
+                    f"\n\n🗺️ EVACUATION:\n"
+                    f"  Route → {best['name']} ({best['distance_km']}km, ~{best['travel_time_min']} min walk)\n"
+                    f"  Status: {safety.replace('_', ' ').title()}\n"
+                    f"  Capacity: {best['capacity']} | Contact: {best['contact']}\n"
+                    f"  Facilities: {facilities}"
+                )
+                if avoid:
+                    evac_en += f"\n  ⚠ Road closures needed: {', '.join(avoid)}"
+                alts = evac_route.get("alternatives", [])
+                if alts:
+                    evac_en += f"\n  Alt shelters: {', '.join(a['name'] + ' (' + str(a['distance_km']) + 'km)' for a in alts)}"
+
+                evac_mr = (
+                    f"\n\n🗺️ बाहेर पडण्याचा मार्ग:\n"
+                    f"  {best['name']} ({best['distance_km']}किमी, ~{best['travel_time_min']} मिनिटे)\n"
+                    f"  स्थिती: {safety.replace('_', ' ')} | क्षमता: {best['capacity']}\n"
+                    f"  संपर्क: {best['contact']}\n"
+                    f"  सुविधा: {facilities}"
+                )
+                if avoid:
+                    evac_mr += f"\n  ⚠ बंद करावे: {', '.join(avoid)}"
+
+        # ── Forecast block ───────────────────────────────────────────
+        forecast_en = ""
+        forecast_mr = ""
+        if forecast_info:
+            peak = forecast_info.get("peak_risk", risk_score)
+            hrs = forecast_info.get("peak_hours", "?")
+            trend = forecast_info.get("trend", "unknown")
+            forecast_en = f"\n\n📈 FORECAST: Peak {peak:.0f}% in {hrs}h | Trend: {trend.title()}"
+            trend_mr = {"rising": "वाढत आहे", "falling": "कमी होत आहे", "stable": "स्थिर"}.get(trend, trend)
+            forecast_mr = f"\n\n📈 अंदाज: कमाल {peak:.0f}% — {hrs} तासात | कल: {trend_mr}"
+
         if hazard == "flood":
-            title_en = f"🚨 DEPLOY: Flood Response — {ward_name} ({ward_id})"
-            route_line = ""
-            if evac_route:
-                best = evac_route.get("recommended_shelter", {})
-                if best:
-                    safety = evac_route.get("route_safety", {}).get("status", "safe")
-                    avoid = evac_route.get("route_safety", {}).get("avoid_roads", [])
-                    avoid_str = f" (avoid: {', '.join(avoid)}" + ")" if avoid else ""
-                    alts = evac_route.get("alternatives", [])
-                    alt_str = ""
-                    if alts:
-                        alt_str = f"\n• Alt shelter: {alts[0]['name']} ({alts[0]['distance_km']}km)"
-                    route_line = (
-                        f"\n• Evacuation route → {best['name']} ({best['distance_km']}km, ~{best['travel_time_min']} min) "
-                        f"[{safety}]{avoid_str}"
-                        f"\n• Shelter capacity: {best['capacity']}, contact: {best['contact']}"
-                        f"\n• Facilities: {', '.join(best['facilities'])}"
-                        f"{alt_str}"
-                    )
+            # Pumps scale with risk
+            pumps = 3 if risk_score < 70 else (5 if risk_score < 85 else 8)
+            boats = 1 if risk_score < 70 else (2 if risk_score < 85 else 4)
+
+            title_en = f"🚨 DEPLOYMENT ORDER — {ward_name} ({ward_id})"
             message_en = (
-                f"FLOOD RISK {risk_score:.0f}% in {ward_name}.\n"
-                f"ACTION REQUIRED:\n"
-                f"• Deploy 5 water pumps to {ward_name}\n"
-                f"• Pre-position 2 NDRF boats at nearest access point\n"
-                f"• Notify {elderly_count:,} elderly residents via door-to-door\n"
-                f"• Alert {shelter['name'] if shelter else 'nearest shelter'} "
-                f"(capacity: {shelter['capacity'] if shelter else 'N/A'})"
-                f"{route_line}"
+                f"📊 SITUATION:\n"
+                f"  Risk: {risk_score:.0f}% ({prio_label}) | Hazard: Flood\n"
+                f"  Ward: {ward_name} ({ward_id})\n"
+                f"  Population: {pop:,} | Elderly: {elderly_count:,} ({elderly_pct:.0f}%)\n"
+                f"  Drainage index: {drainage:.2f} | Elevation: {elevation}m"
+                f"{forecast_en}"
+                f"\n\n🔧 DEPLOY:\n"
+                f"  • {pumps} water pumps to {ward_name}\n"
+                f"  • {boats} NDRF rescue boats at nearest river access\n"
+                f"  • Door-to-door alert for {elderly_count:,} elderly residents\n"
+                f"  • Open shelter: {shelter_name} (capacity {shelter_cap})"
+                f"{evac_en}"
+                f"\n\n📞 Coordination: PMC Disaster Cell — 020-25501000"
             )
-            title_mr = f"🚨 तैनाती: पूर प्रतिसाद — {ward_name}"
-            mr_route = ""
-            if evac_route:
-                best = evac_route.get("recommended_shelter", {})
-                if best:
-                    mr_route = f"\nबाहेर पडण्याचा मार्ग: {best['name']} ({best['distance_km']}किमी)"
+            title_mr = f"🚨 तैनाती आदेश — {ward_name} ({ward_id})"
             message_mr = (
-                f"पूर धोका {risk_score:.0f}% — {ward_name}\n"
-                f"कृती आवश्यक: पंप तैनात करा, बचाव नौका तयार ठेवा"
-                f"{mr_route}"
+                f"📊 परिस्थिती:\n"
+                f"  धोका: {risk_score:.0f}% ({prio_label}) | प्रकार: पूर\n"
+                f"  प्रभाग: {ward_name} ({ward_id})\n"
+                f"  लोकसंख्या: {pop:,} | वृद्ध: {elderly_count:,} ({elderly_pct:.0f}%)\n"
+                f"  निचरा निर्देशांक: {drainage:.2f} | उंची: {elevation}मी"
+                f"{forecast_mr}"
+                f"\n\n🔧 तैनाती:\n"
+                f"  • {pumps} पाणी पंप — {ward_name}\n"
+                f"  • {boats} NDRF बचाव नौका — नदीकाठी\n"
+                f"  • {elderly_count:,} वृद्ध रहिवाशांना घरोघरी सूचना\n"
+                f"  • आश्रयस्थान उघडा: {shelter_name} (क्षमता {shelter_cap})"
+                f"{evac_mr}"
+                f"\n\n📞 समन्वय: PMC आपत्ती कक्ष — ०२०-२५५०१०००"
             )
         else:
-            title_en = f"🌡️ DEPLOY: Heat Response — {ward_name} ({ward_id})"
+            med_units = 2 if risk_score < 80 else 4
+            expected_cases = int(pop * 0.002)
+
+            title_en = f"🌡️ DEPLOYMENT ORDER — {ward_name} ({ward_id})"
             message_en = (
-                f"HEAT RISK {risk_score:.0f}% in {ward_name}.\n"
-                f"ACTION REQUIRED:\n"
-                f"• Open cooling center at {shelter['name'] if shelter else 'community hall'}\n"
-                f"• Deploy 2 mobile medical units\n"
-                f"• Distribute ORS packets to vulnerable areas\n"
-                f"• Alert hospitals: expected {int(pop * 0.002)} heat-related cases\n"
-                f"• Water tanker deployment to {ward_name}"
+                f"📊 SITUATION:\n"
+                f"  Risk: {risk_score:.0f}% ({prio_label}) | Hazard: Heatwave\n"
+                f"  Ward: {ward_name} ({ward_id})\n"
+                f"  Population: {pop:,} | Elderly: {elderly_count:,} ({elderly_pct:.0f}%)"
+                f"{forecast_en}"
+                f"\n\n🔧 DEPLOY:\n"
+                f"  • Open cooling center at {shelter_name}\n"
+                f"  • {med_units} mobile medical units\n"
+                f"  • ORS + water distribution to vulnerable zones\n"
+                f"  • Alert hospitals: est. {expected_cases} heat-stroke cases\n"
+                f"  • Water tanker deployment to {ward_name}"
+                f"\n\n📞 Coordination: PMC Disaster Cell — 020-25501000"
             )
-            title_mr = f"🌡️ तैनाती: उष्णता प्रतिसाद — {ward_name}"
+            title_mr = f"🌡️ तैनाती आदेश — {ward_name} ({ward_id})"
             message_mr = (
-                f"उष्णता धोका {risk_score:.0f}% — {ward_name}\n"
-                f"कृती: शीतलन केंद्र उघडा, वैद्यकीय पथक पाठवा"
+                f"📊 परिस्थिती:\n"
+                f"  धोका: {risk_score:.0f}% ({prio_label}) | प्रकार: उष्णतेची लाट\n"
+                f"  प्रभाग: {ward_name} ({ward_id})\n"
+                f"  लोकसंख्या: {pop:,} | वृद्ध: {elderly_count:,} ({elderly_pct:.0f}%)"
+                f"{forecast_mr}"
+                f"\n\n🔧 तैनाती:\n"
+                f"  • शीतलन केंद्र उघडा — {shelter_name}\n"
+                f"  • {med_units} फिरती वैद्यकीय पथके\n"
+                f"  • ORS + पाणी वितरण\n"
+                f"  • रुग्णालय सतर्कता: अंदाजे {expected_cases} उष्माघात प्रकरणे\n"
+                f"  • पाणी टँकर — {ward_name}"
+                f"\n\n📞 समन्वय: PMC आपत्ती कक्ष — ०२०-२५५०१०००"
             )
-        
+
         return Alert(
             alert_id=f"ALT-{self.alert_counter:04d}",
             ward_id=ward_id,
@@ -323,6 +389,8 @@ class AlertService:
             expires_at="",
             channel="push",
             evacuation_route=evac_route,
+            population=pop,
+            elderly_pct=elderly_pct,
         )
 
     def _flood_citizen_message(self, ward_name, risk, priority, shelter, forecast, evac_route=None):
@@ -500,6 +568,42 @@ class AlertService:
 
         # --- Authority alert ---
         self.alert_counter += 1
+        demo_pop = 145000
+        demo_elderly_pct = 12.0
+        demo_elderly_count = int(demo_pop * demo_elderly_pct / 100)
+
+        # Build rich authority evacuation block
+        auth_evac_en = ""
+        auth_evac_mr = ""
+        if evac_route:
+            best = evac_route.get("recommended_shelter", {})
+            if best:
+                safety = evac_route.get("route_safety", {}).get("status", "safe")
+                avoid = evac_route.get("route_safety", {}).get("avoid_roads", [])
+                facilities = ", ".join(best.get("facilities", []))
+                auth_evac_en = (
+                    f"\n\n🗺️ EVACUATION:\n"
+                    f"  Route → {best['name']} ({best['distance_km']}km, ~{best['travel_time_min']} min walk)\n"
+                    f"  Status: {safety.replace('_', ' ').title()}\n"
+                    f"  Capacity: {best['capacity']} | Contact: {best['contact']}\n"
+                    f"  Facilities: {facilities}"
+                )
+                if avoid:
+                    auth_evac_en += f"\n  ⚠ Road closures needed: {', '.join(avoid)}"
+                alts = evac_route.get("alternatives", [])
+                if alts:
+                    auth_evac_en += f"\n  Alt shelters: {', '.join(a['name'] + ' (' + str(a['distance_km']) + 'km)' for a in alts)}"
+
+                auth_evac_mr = (
+                    f"\n\n🗺️ बाहेर पडण्याचा मार्ग:\n"
+                    f"  {best['name']} ({best['distance_km']}किमी, ~{best['travel_time_min']} मिनिटे)\n"
+                    f"  स्थिती: {safety.replace('_', ' ')} | क्षमता: {best['capacity']}\n"
+                    f"  संपर्क: {best['contact']}\n"
+                    f"  सुविधा: {facilities}"
+                )
+                if avoid:
+                    auth_evac_mr += f"\n  ⚠ बंद करावे: {', '.join(avoid)}"
+
         authority = Alert(
             alert_id=f"ALT-{self.alert_counter:04d}",
             ward_id=demo_ward,
@@ -508,25 +612,38 @@ class AlertService:
             priority=demo_priority,
             hazard=demo_hazard,
             risk_score=demo_risk,
-            title_en=f"⚠️ AUTHORITY ALERT — {demo_ward_name} (Flood {demo_risk:.0f}%)",
+            title_en=f"🚨 DEPLOYMENT ORDER — {demo_ward_name} ({demo_ward})",
             message_en=(
-                f"Ward {demo_ward} ({demo_ward_name}) flood risk at {demo_risk:.0f}%. "
-                "Population: ~145,000. Elderly ratio: 12%. "
-                "Recommended: pre-position 3 pumps, 2 rescue boats. "
-                f"Primary shelter: {shelter.get('name', 'N/A')} (capacity {shelter.get('capacity', '?')})."
-                + (f"\nEvacuation route: {evac_route['recommended_shelter']['name']} "
-                   f"({evac_route['recommended_shelter']['distance_km']}km). "
-                   f"Contact: {evac_route['recommended_shelter'].get('contact', 'N/A')}."
-                   if evac_route else "")
+                f"📊 SITUATION:\n"
+                f"  Risk: {demo_risk:.0f}% (WARNING) | Hazard: Flood\n"
+                f"  Ward: {demo_ward_name} ({demo_ward})\n"
+                f"  Population: {demo_pop:,} | Elderly: {demo_elderly_count:,} ({demo_elderly_pct:.0f}%)\n"
+                f"  Drainage index: 0.35 | Elevation: 556m"
+                f"\n\n🔧 DEPLOY:\n"
+                f"  • 5 water pumps to {demo_ward_name}\n"
+                f"  • 2 NDRF rescue boats at Mutha river bank\n"
+                f"  • Door-to-door alert for {demo_elderly_count:,} elderly residents\n"
+                f"  • Open shelter: {shelter.get('name', 'N/A')} (capacity {shelter.get('capacity', '?')})"
+                f"{auth_evac_en}"
+                f"\n\n📞 Coordination: PMC Disaster Cell — 020-25501000"
             ),
-            title_mr=f"⚠️ अधिकारी सूचना — {demo_ward_name} (पूर {demo_risk:.0f}%)",
+            title_mr=f"🚨 तैनाती आदेश — {demo_ward_name} ({demo_ward})",
             message_mr=(
-                f"प्रभाग {demo_ward} ({demo_ward_name}) पूर धोका {demo_risk:.0f}%. "
-                "लोकसंख्या: ~१,४५,०००. वृद्ध प्रमाण: १२%. "
-                "शिफारस: ३ पंप, २ बचाव नौका तैनात करा."
+                f"📊 परिस्थिती:\n"
+                f"  धोका: {demo_risk:.0f}% (चेतावणी) | प्रकार: पूर\n"
+                f"  प्रभाग: {demo_ward_name} ({demo_ward})\n"
+                f"  लोकसंख्या: {demo_pop:,} | वृद्ध: {demo_elderly_count:,} ({demo_elderly_pct:.0f}%)\n"
+                f"  निचरा निर्देशांक: ०.३५ | उंची: ५५६मी"
+                f"\n\n🔧 तैनाती:\n"
+                f"  • ५ पाणी पंप — {demo_ward_name}\n"
+                f"  • २ NDRF बचाव नौका — मुठा नदीकाठी\n"
+                f"  • {demo_elderly_count:,} वृद्ध रहिवाशांना घरोघरी सूचना\n"
+                f"  • आश्रयस्थान उघडा: {shelter.get('name', 'N/A')} (क्षमता {shelter.get('capacity', '?')})"
+                f"{auth_evac_mr}"
+                f"\n\n📞 समन्वय: PMC आपत्ती कक्ष — ०२०-२५५०१०००"
             ),
             actions=[
-                "Deploy 3 water pumps to Kasba Peth",
+                "Deploy 5 water pumps to Kasba Peth",
                 "Pre-position 2 rescue boats at Mutha river bank",
                 f"Open {shelter.get('name', 'shelter')} for evacuees",
                 "Alert NDRF Pune unit on standby",
@@ -537,6 +654,8 @@ class AlertService:
             expires_at="",
             channel="sms",
             evacuation_route=evac_route,
+            population=demo_pop,
+            elderly_pct=demo_elderly_pct,
         )
 
         return [citizen, authority]
