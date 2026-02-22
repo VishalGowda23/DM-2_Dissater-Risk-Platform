@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Droplets, Thermometer, Users, MapPin, TrendingUp, Activity } from 'lucide-react';
+import { useLang, hazardKey, wardName } from '@/lib/i18n';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { API_BASE_URL, type RiskData, type Ward, type RiskSummary as RiskSummaryType, getRiskColor } from '../lib/types';
@@ -11,6 +12,7 @@ interface RiskSummaryProps {
 }
 
 export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
+  const { t, lang } = useLang();
   const [summary, setSummary] = useState<RiskSummaryType | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,10 +34,10 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
 
   // Prepare chart data
   const riskDistribution = [
-    { name: 'Low (0-30%)', count: riskData.filter(r => r.top_risk_score <= 30).length, color: '#22c55e' },
-    { name: 'Moderate (31-60%)', count: riskData.filter(r => r.top_risk_score > 30 && r.top_risk_score <= 60).length, color: '#eab308' },
-    { name: 'High (61-80%)', count: riskData.filter(r => r.top_risk_score > 60 && r.top_risk_score <= 80).length, color: '#f97316' },
-    { name: 'Critical (81-100%)', count: riskData.filter(r => r.top_risk_score > 80).length, color: '#ef4444' },
+    { name: t('low030'), count: riskData.filter(r => r.top_risk_score <= 30).length, color: '#22c55e' },
+    { name: t('moderate3160'), count: riskData.filter(r => r.top_risk_score > 30 && r.top_risk_score <= 60).length, color: '#eab308' },
+    { name: t('high6180'), count: riskData.filter(r => r.top_risk_score > 60 && r.top_risk_score <= 80).length, color: '#f97316' },
+    { name: t('critical81100'), count: riskData.filter(r => r.top_risk_score > 80).length, color: '#ef4444' },
   ];
 
   const topRiskWards = [...riskData]
@@ -45,11 +47,11 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'critical':
-        return <Badge className="bg-red-600 text-white rounded-none">CRITICAL</Badge>;
+        return <Badge className="bg-red-600 text-white rounded-none">{t('statusCritical')}</Badge>;
       case 'high':
-        return <Badge className="bg-orange-500 text-white rounded-none">HIGH</Badge>;
+        return <Badge className="bg-orange-500 text-white rounded-none">{t('statusHigh')}</Badge>;
       default:
-        return <Badge className="bg-green-500 text-white rounded-none">NORMAL</Badge>;
+        return <Badge className="bg-green-500 text-white rounded-none">{t('statusNormal')}</Badge>;
     }
   };
 
@@ -64,22 +66,22 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
   return (
     <div className="space-y-6">
       {/* Status Header */}
-      <div className="flex items-center justify-between bg-white border-2 border-black p-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white border-2 border-black p-3 sm:p-4 gap-2 sm:gap-0">
         <div>
-          <h2 className="text-2xl font-black uppercase">City Risk Summary</h2>
-          <p className="text-gray-500">Pune Municipal Corporation</p>
+          <h2 className="text-2xl font-black uppercase">{t('cityRiskSummary')}</h2>
+          <p className="text-gray-500">{t('puneMunicipal')}</p>
         </div>
         <div className="text-right">
-          <div className="text-sm text-gray-500 mb-1">Overall Status</div>
+          <div className="text-sm text-gray-500 mb-1">{t('overallStatus')}</div>
           {getStatusBadge(summary?.overall_status || 'normal')}
         </div>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <Card className="border-2 border-black rounded-none">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold uppercase text-gray-500">Total Wards</CardTitle>
+            <CardTitle className="text-sm font-bold uppercase text-gray-500">{t('totalWards')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3">
@@ -91,7 +93,7 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
 
         <Card className="border-2 border-black rounded-none">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold uppercase text-gray-500">Total Population</CardTitle>
+            <CardTitle className="text-sm font-bold uppercase text-gray-500">{t('totalPopulation')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3">
@@ -105,7 +107,7 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
 
         <Card className="border-2 border-black rounded-none">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold uppercase text-gray-500">Critical Wards</CardTitle>
+            <CardTitle className="text-sm font-bold uppercase text-gray-500">{t('criticalWards')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3">
@@ -119,7 +121,7 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
 
         <Card className="border-2 border-black rounded-none">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold uppercase text-gray-500">High Risk Wards</CardTitle>
+            <CardTitle className="text-sm font-bold uppercase text-gray-500">{t('highRiskWardsLabel')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3">
@@ -133,11 +135,11 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {/* Risk Distribution Chart */}
         <Card className="border-2 border-black rounded-none">
           <CardHeader>
-            <CardTitle className="font-black uppercase">Risk Distribution</CardTitle>
+            <CardTitle className="font-black uppercase">{t('riskDistribution')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-64">
@@ -161,7 +163,7 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
         {/* Average Risks */}
         <Card className="border-2 border-black rounded-none">
           <CardHeader>
-            <CardTitle className="font-black uppercase">Average Risk by Hazard</CardTitle>
+            <CardTitle className="font-black uppercase">{t('avgRiskByHazard')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
@@ -169,7 +171,7 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Droplets className="w-5 h-5 text-blue-500" />
-                    <span className="font-bold">Flood Risk</span>
+                    <span className="font-bold">{t('floodRisk')}</span>
                   </div>
                   <span className="text-2xl font-black">
                     {summary?.average_risks?.flood?.toFixed(1) || 
@@ -188,7 +190,7 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Thermometer className="w-5 h-5 text-orange-500" />
-                    <span className="font-bold">Heat Risk</span>
+                    <span className="font-bold">{t('heatRisk')}</span>
                   </div>
                   <span className="text-2xl font-black">
                     {summary?.average_risks?.heat?.toFixed(1) || 
@@ -210,18 +212,18 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
       {/* Top Risk Wards */}
       <Card className="border-2 border-black rounded-none">
         <CardHeader>
-          <CardTitle className="font-black uppercase">Top 10 Highest Risk Wards</CardTitle>
+          <CardTitle className="font-black uppercase">{t('top10Wards')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b-2 border-black">
-                  <th className="text-left py-2 px-4 font-bold">Rank</th>
-                  <th className="text-left py-2 px-4 font-bold">Ward</th>
-                  <th className="text-left py-2 px-4 font-bold">Top Hazard</th>
-                  <th className="text-right py-2 px-4 font-bold">Risk Score</th>
-                  <th className="text-right py-2 px-4 font-bold">Population</th>
+                  <th className="text-left py-2 px-4 font-bold">{t('rank')}</th>
+                  <th className="text-left py-2 px-4 font-bold">{t('ward')}</th>
+                  <th className="text-left py-2 px-4 font-bold">{t('topHazard')}</th>
+                  <th className="text-right py-2 px-4 font-bold">{t('riskScore')}</th>
+                  <th className="text-right py-2 px-4 font-bold">{t('population')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -232,7 +234,7 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
                         {idx + 1}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-medium">{ward.ward_name}</td>
+                    <td className="py-3 px-4 font-medium">{wardName(ward, lang)}</td>
                     <td className="py-3 px-4">
                       <Badge 
                         variant="outline" 
@@ -244,7 +246,7 @@ export default function RiskSummary({ riskData, wards }: RiskSummaryProps) {
                             : 'border-gray-500 text-gray-600'
                         }`}
                       >
-                        {ward.top_hazard}
+                        {t(hazardKey(ward.top_hazard))}
                       </Badge>
                     </td>
                     <td className="py-3 px-4 text-right">

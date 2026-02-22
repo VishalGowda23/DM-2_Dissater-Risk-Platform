@@ -72,24 +72,41 @@ class ResourceAllocator:
 
     def calculate_need_score(self, ward_risk: Dict, use_delta: bool = False) -> float:
         """
-        Calculate ward need score
-        Need = Risk × Population (with optional delta boost)
+        Calculate ward need score.
+        Risk is primary factor (70%) with population as secondary (30%).
+        This ensures high-risk wards get prioritised even if less populated.
+        Formula: need = risk_weight^2 * (0.7 + 0.3 * pop_weight)
         """
         risk = ward_risk.get("final_combined_risk", 0) or 0
         population = ward_risk.get("population", 100000) or 100000
 
-        base_need = (risk / 100) * population
+        # Normalize population to 0-1 scale (Pune wards: 98K-350K)
+        pop_normalized = min(1.0, max(0.0, (population - 50000) / 400000))
 
-        # Boost for surge conditions
+        # Risk is primary driver — square it to amplify differences
+        risk_weight = (risk / 100) ** 2
+
+        # Combine: 70% risk, 30% population
+        base_need = risk_weight * (0.7 + 0.3 * pop_normalized) * 100
+
+        # Boost for active surge conditions (rising risk, not falling)
         if use_delta:
-            flood_delta = abs(ward_risk.get("flood_risk_delta_pct", 0) or 0)
-            heat_delta = abs(ward_risk.get("heat_risk_delta_pct", 0) or 0)
-            max_delta = max(flood_delta, heat_delta)
+            flood_delta = ward_risk.get("flood_risk_delta_pct", 0) or 0
+            heat_delta = ward_risk.get("heat_risk_delta_pct", 0) or 0
+            max_delta = max(flood_delta, heat_delta)  # only positive delta = rising risk
 
-            if max_delta > 40:
-                base_need *= 1.5  # Critical surge
-            elif max_delta > 20:
-                base_need *= 1.2  # Surge
+            # Only meaningful if absolute risk is also significant
+            # A ward at 15→35 (low→moderate) shouldn't outrank a ward at 45 (moderate)
+            if max_delta > 0:
+                # Scale boost by both delta % and absolute risk level
+                risk_gate = min(1.0, risk / 60)  # full factor at risk ≥ 60
+                if max_delta > 40:
+                    boost = 1.0 + 0.5 * risk_gate  # up to 1.5x at high risk
+                elif max_delta > 20:
+                    boost = 1.0 + 0.3 * risk_gate  # up to 1.3x
+                else:
+                    boost = 1.0 + 0.1 * risk_gate  # up to 1.1x
+                base_need *= boost
 
         return base_need
 
@@ -110,9 +127,8 @@ class ResourceAllocator:
 
         total_need = sum(w["need_score"] for w in wards_needs)
         if total_need <= 0:
-            # Equal distribution
-            per_ward = total_available // len(wards_needs)
-            return [{**w, "allocated": per_ward} for w in wards_needs]
+            # No ward needs this resource — allocate 0 to all
+            return [{**w, "allocated": 0} for w in wards_needs]
 
         # Step 1: Ensure minimum for critical wards
         critical_wards = [w for w in wards_needs if w.get("risk_category") in ["critical", "high"]]
@@ -200,8 +216,14 @@ class ResourceAllocator:
         # Generate explanations
         explanations = self._generate_explanations(ward_risk_data, allocations)
 
+        # Calculate resource requirements (ideal needed) and gaps
+        resource_requirements = self._calculate_resource_requirements(
+            ward_risk_data, resources, allocations
+        )
+
         return {
             "allocations": allocations,
+            "resource_requirements": resource_requirements,
             "summary": {
                 "total_wards": len(ward_risk_data),
                 "total_resources_types": len(resources),
@@ -213,21 +235,137 @@ class ResourceAllocator:
             "explanations": explanations,
         }
 
+    def _calculate_resource_requirements(self, wards: List[Dict],
+                                          resources: Dict,
+                                          allocations: Dict) -> Dict:
+        """
+        Calculate ideal resource requirements per ward and system-wide gaps.
+        
+        For each resource type, the ideal per-ward need is:
+          ideal = ceil(risk_factor * pop_factor * effectiveness)
+        where:
+          risk_factor = risk / 40 (so risk=40 → 1x, risk=80 → 2x)
+          pop_factor  = population / base_pop_per_unit (varies by resource)
+          effectiveness = resource effectiveness for ward's top hazard
+        
+        Gap = max(0, total_required - total_available)
+        """
+        # Base population per unit for each resource type
+        POP_PER_UNIT = {
+            "water_pumps": 80000,
+            "evacuation_buses": 100000,
+            "relief_camps": 150000,
+            "cooling_centers": 100000,
+            "medical_units": 150000,
+        }
+
+        requirements = {}
+
+        for resource_key, resource_config in resources.items():
+            effectiveness = resource_config.get("effectiveness", {})
+            total_available = resource_config["total"]
+            base_pop = POP_PER_UNIT.get(resource_key, 100000)
+
+            ward_requirements = []
+            total_required = 0
+
+            for w in wards:
+                risk = w.get("final_combined_risk", 0) or 0
+                population = w.get("population", 100000) or 100000
+                top_hazard = w.get("top_hazard", "flood")
+
+                # If top_hazard is "none" or unknown, determine from actual risk values
+                if top_hazard not in effectiveness:
+                    flood_risk = w.get("flood_risk", 0) or 0
+                    heat_risk = w.get("heat_risk", 0) or 0
+                    top_hazard = "heat" if heat_risk > flood_risk else "flood"
+
+                eff = effectiveness.get(top_hazard, 0.0)
+
+                if eff <= 0:
+                    # Resource irrelevant for this hazard type
+                    ward_requirements.append({
+                        "ward_id": w["ward_id"],
+                        "required": 0,
+                        "allocated": 0,
+                        "gap": 0,
+                    })
+                    continue
+
+                risk_factor = risk / 40.0  # risk 40 = 1x need
+                pop_factor = population / base_pop
+                ideal = math.ceil(risk_factor * pop_factor * eff)
+
+                # Look up actual allocation for this ward
+                actual = 0
+                for wa in allocations.get(resource_key, {}).get("ward_allocations", []):
+                    if wa["ward_id"] == w["ward_id"]:
+                        actual = wa["allocated"]
+                        break
+
+                gap = max(0, ideal - actual)
+                total_required += ideal
+
+                ward_requirements.append({
+                    "ward_id": w["ward_id"],
+                    "ward_name": w.get("ward_name", ""),
+                    "required": ideal,
+                    "allocated": actual,
+                    "gap": gap,
+                })
+
+            total_gap = max(0, total_required - total_available)
+            total_allocated = allocations.get(resource_key, {}).get("total_allocated", 0)
+
+            requirements[resource_key] = {
+                "resource_name": resource_config["name"],
+                "unit": resource_config["unit"],
+                "total_available": total_available,
+                "total_required": total_required,
+                "total_allocated": total_allocated,
+                "total_gap": total_gap,
+                "coverage_pct": round(
+                    min(100, (total_available / max(total_required, 1)) * 100), 1
+                ),
+                "ward_requirements": sorted(
+                    ward_requirements, key=lambda x: x["gap"], reverse=True
+                ),
+            }
+
+        return requirements
+
     def _adjust_for_effectiveness(self, wards: List[Dict], effectiveness: Dict) -> List[Dict]:
-        """Adjust need scores based on resource effectiveness per hazard"""
+        """Adjust need scores based on resource effectiveness per hazard.
+        If a resource has 0.0 effectiveness for a hazard (e.g. pumps for heat),
+        the ward gets zero allocation for that resource."""
         adjusted = []
         for w in wards:
             ward_copy = dict(w)
 
-            # Blend effectiveness based on ward's primary hazard
             top_hazard = w.get("top_hazard", "flood")
-            eff = effectiveness.get(top_hazard, 0.5)
 
-            if eff < 0.1:
-                # This resource isn't useful for this hazard type
-                ward_copy["need_score"] *= 0.1
-            else:
-                ward_copy["need_score"] *= eff
+            # If top_hazard is "none" or unknown, determine from actual risk values
+            if top_hazard not in effectiveness:
+                flood_risk = w.get("flood_risk", 0) or 0
+                heat_risk = w.get("heat_risk", 0) or 0
+                if heat_risk > flood_risk:
+                    top_hazard = "heat"
+                elif flood_risk > heat_risk:
+                    top_hazard = "flood"
+                else:
+                    # Both equal or zero — blend effectiveness
+                    flood_eff = effectiveness.get("flood", 0.5)
+                    heat_eff = effectiveness.get("heat", 0.5)
+                    eff = (flood_eff + heat_eff) / 2
+                    ward_copy["need_score"] *= eff
+                    adjusted.append(ward_copy)
+                    continue
+
+            eff = effectiveness.get(top_hazard, 0.0)
+
+            # Zero effectiveness means this resource is irrelevant for this hazard
+            # e.g. water_pumps for heat wards = 0, cooling_centers for flood wards = 0
+            ward_copy["need_score"] *= eff
 
             adjusted.append(ward_copy)
 

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { AlertTriangle, Droplets, Thermometer } from 'lucide-react';
 import { type RiskData, type Ward, getRiskColor } from '../lib/types';
+import { useLang, wardName, hazardKey } from '@/lib/i18n';
 
 interface WardListProps {
   riskData: RiskData[];
@@ -10,6 +11,7 @@ interface WardListProps {
 }
 
 export default function WardList({ riskData, wards, selectedWard, onSelectWard }: WardListProps) {
+  const { t, lang } = useLang();
   // Merge ward data with risk data and sort by risk
   const mergedData = useMemo(() => {
     const wardMap: { [key: string]: Ward } = {};
@@ -40,8 +42,8 @@ export default function WardList({ riskData, wards, selectedWard, onSelectWard }
       {mergedData.length === 0 ? (
         <div className="p-8 text-center text-gray-500">
           <AlertTriangle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p className="font-medium">No risk data available</p>
-          <p className="text-sm mt-1">Click "Calculate" to generate risk scores</p>
+          <p className="font-medium">{t('noRiskData')}</p>
+          <p className="text-sm mt-1">{t('clickCalculate')}</p>
         </div>
       ) : (
         mergedData.map(({ risk, ward }) => {
@@ -62,11 +64,11 @@ export default function WardList({ riskData, wards, selectedWard, onSelectWard }
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs text-gray-500">{ward.ward_id}</span>
-                    <h3 className="font-bold text-sm truncate">{ward.ward_name}</h3>
+                    <h3 className="font-bold text-sm truncate">{wardName(ward, lang)}</h3>
                   </div>
                   
                   <div className="flex items-center gap-3 mt-1 text-xs text-gray-600">
-                    <span>Pop: {(ward.population / 1000).toFixed(1)}k</span>
+                    <span>{t('popLabel')} {(ward.population / 1000).toFixed(1)}k</span>
                     {risk.flood && risk.flood.delta > 10 && (
                       <span className="text-red-600 font-bold">
                         +{risk.flood.delta.toFixed(0)}%
@@ -87,7 +89,7 @@ export default function WardList({ riskData, wards, selectedWard, onSelectWard }
                   </div>
                   <div className="flex items-center gap-1">
                     {getHazardIcon(risk.top_hazard)}
-                    <span className="text-xs font-medium uppercase">{risk.top_hazard}</span>
+                    <span className="text-xs font-medium uppercase">{t(hazardKey(risk.top_hazard))}</span>
                   </div>
                 </div>
               </div>

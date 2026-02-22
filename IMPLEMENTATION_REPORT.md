@@ -1,4 +1,4 @@
-# DisasterIQ — Pune Multi-Hazard Micro-Level Disaster Intelligence Platform
+# PRAKALP — Predictive Risk Assessment And Knowledge Analytics For Localized Preparedness
 
 ## Implementation Report v2.0
 
@@ -35,7 +35,7 @@
 
 ## 1. Executive Summary
 
-**DisasterIQ** is a production-grade, micro-level multi-hazard disaster intelligence platform engineered for the Pune Municipal Corporation (PMC). It transforms disaster management from a reactive, post-event scramble into a proactive, data-driven governance capability by computing continuous, ward-level risk scores *before* any disaster event occurs.
+**PRAKALP** is a production-grade, micro-level multi-hazard disaster intelligence platform engineered for the Pune Municipal Corporation (PMC). It transforms disaster management from a reactive, post-event scramble into a proactive, data-driven governance capability by computing continuous, ward-level risk scores *before* any disaster event occurs.
 
 The platform ingests real-time meteorological data from the Open-Meteo forecast API for all 20 PMC wards, fuses it with Census 2011 demographics, SRTM-derived elevation models, OpenStreetMap infrastructure density metrics, and 10-year historical disaster records (verified from IMD Pune, NDRF reports, and Times of India archives). A dual-layer risk engine — Layer 1: explainable weighted-composite formulas; Layer 2: XGBoost-calibrated ML probabilities — produces a fused risk score per ward every 30 minutes. SHAP-based explainability surfaces the top contributing risk drivers for each assessment, enabling authorities to understand *why* a ward is at risk, not merely *that* it is.
 
@@ -74,13 +74,13 @@ Traditional Indian disaster management follows a **respond-recover-rehabilitate*
 2. **Information asymmetry:** Commissioner-level decisions rely on phone calls from ward officers, not quantified risk assessments with confidence intervals.
 3. **Resource misallocation:** Without risk-ranked scoring, resources are distributed by political pressure or historical precedent, not by computed vulnerability.
 
-DisasterIQ inverts this paradigm by providing authorities a continuously updated, spatially resolved, multi-hazard risk picture that answers three questions *before* an event: *Where* is the risk highest? *Why* is it rising? *What* should we do about it?
+PRAKALP inverts this paradigm by providing authorities a continuously updated, spatially resolved, multi-hazard risk picture that answers three questions *before* an event: *Where* is the risk highest? *Why* is it rising? *What* should we do about it?
 
 ### 2.3 Alignment with National Frameworks
 
 The platform aligns with:
 - **Sendai Framework for Disaster Risk Reduction (2015–2030):** Priority 1 — Understanding disaster risk.
-- **NDMA Guidelines:** District Disaster Management Plans (DDMPs) mandate risk assessment; DisasterIQ automates this.
+- **NDMA Guidelines:** District Disaster Management Plans (DDMPs) mandate risk assessment; PRAKALP automates this.
 - **NITI Aayog Digital India 2.0:** AI-driven governance at the municipal level.
 - **BIS IS 1893:2016:** Seismic zone-aware risk categorization (Pune: Zone III).
 
@@ -109,7 +109,7 @@ The platform aligns with:
 
 ## 4. Objectives
 
-DisasterIQ defines six measurable objectives, each mapped to a specific platform capability:
+PRAKALP defines six measurable objectives, each mapped to a specific platform capability:
 
 | # | Objective | Metric | Platform Feature |
 |---|-----------|--------|-----------------|
@@ -126,14 +126,15 @@ DisasterIQ defines six measurable objectives, each mapped to a specific platform
 
 ### 5.1 Platform Identity
 
-**Name:** DisasterIQ  
+**Name:** PRAKALP  
+**Full Form:** Predictive Risk Assessment And Knowledge Analytics For Localized Preparedness  
 **Tagline:** *Pre-Disaster Intelligence for Proactive Governance*  
 **Version:** 2.0.0  
 **Deployment Target:** Pune Municipal Corporation (PMC) Smart City Operations Centre  
 
 ### 5.2 Architectural Philosophy
 
-DisasterIQ is not a dashboard layered on top of a weather API. It is a **risk computation engine** with six decoupled processing layers, each independently testable and replaceable:
+PRAKALP is not a dashboard layered on top of a weather API. It is a **risk computation engine** with six decoupled processing layers, each independently testable and replaceable:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -189,7 +190,7 @@ DisasterIQ is not a dashboard layered on top of a weather API. It is a **risk co
 
 ### 6.1 Data Sources Layer
 
-DisasterIQ integrates six heterogeneous data sources, each with defined ingestion frequency, format, and quality handling:
+PRAKALP integrates six heterogeneous data sources, each with defined ingestion frequency, format, and quality handling:
 
 | Data Source | Type | Frequency | Format | Fields Extracted | Quality Handling |
 |-------------|------|-----------|--------|-----------------|-----------------|
@@ -298,7 +299,7 @@ If rasterio is not installed, the system uses curated fallback elevation data se
 
 ### 6.3 AI/ML Layer
 
-DisasterIQ implements a **dual-model architecture** with XGBoost classifiers for flood and heat risk:
+PRAKALP implements a **dual-model architecture** with XGBoost classifiers for flood and heat risk:
 
 ```
                                 ┌─────────────────┐
@@ -464,7 +465,7 @@ Marathi: "आपत्कालीन: कसबा पेठ (W004) मध्�
 
 ### 8.1 Model Architecture
 
-DisasterIQ employs a **dual XGBoost binary classifier** architecture:
+PRAKALP employs a **dual XGBoost binary classifier** architecture:
 
 **Model 1 — Flood Risk Predictor**
 - **Task:** Predict probability of flood impact in next 48 hours per ward.
@@ -584,7 +585,7 @@ The fallback produces correlated results (Pearson r = 0.91 vs. XGBoost on test s
 
 ### 9.1 Mathematical Framework
 
-DisasterIQ employs the UNDRR-aligned risk formulation:
+PRAKALP employs the UNDRR-aligned risk formulation:
 
 $$
 Risk = f(Hazard, Exposure, Vulnerability)
@@ -742,7 +743,7 @@ All risk weights are exposed via the **Admin API** (`PUT /api/admin/weights`) an
 
 ### 10.1 Design Principles
 
-The DisasterIQ dashboard was designed for a **Smart City Operations Centre** context:
+The PRAKALP dashboard was designed for a **Smart City Operations Centre** context:
 - **Glanceability:** Risk status visible from 10 feet away on a wall display.
 - **Drill-down:** Click any ward for full breakdown.
 - **Action-orientation:** Every screen answers "What should I do?"
@@ -992,7 +993,7 @@ Accessible via `GET /api/admin/audit-log` (admin-only).
 - Rule maintenance becomes unmanageable as hazard types and ward count increase.
 - No principled way to combine multiple hazard factors into a single score with confidence.
 
-**DisasterIQ's approach:** The composite formula provides interpretable rule-like structure (satisfying governance requirements) while the ML layer captures non-linear interactions. This hybrid eliminates the limitations of both pure-rule and pure-ML approaches.
+**PRAKALP's approach:** The composite formula provides interpretable rule-like structure (satisfying governance requirements) while the ML layer captures non-linear interactions. This hybrid eliminates the limitations of both pure-rule and pure-ML approaches.
 
 ### 14.2 Rejected Approach: Deep Learning (LSTM/Transformer)
 
@@ -1004,7 +1005,7 @@ Accessible via `GET /api/admin/audit-log` (admin-only).
 - Inference latency (50–200ms per ward on CPU) would slow the 20-ward computation cycle unacceptably on government hardware.
 - Interpretability is critical for governance adoption; attention weights are less intuitive than SHAP values.
 
-**DisasterIQ's approach:** XGBoost handles small datasets effectively (100 estimators with early stopping), runs inference in < 5ms per ward on CPU, and provides native SHAP tree explainability.
+**PRAKALP's approach:** XGBoost handles small datasets effectively (100 estimators with early stopping), runs inference in < 5ms per ward on CPU, and provides native SHAP tree explainability.
 
 ### 14.3 Rejected Approach: Cloud-Only Architecture
 
@@ -1016,7 +1017,7 @@ Accessible via `GET /api/admin/audit-log` (admin-only).
 - Data sovereignty requirements may restrict cloud provider selection.
 - Cost sensitivity: government budgets cannot sustain pay-per-use models at scale.
 
-**DisasterIQ's approach:** The platform runs on a single-node deployment (SQLite + Python) with no external dependencies. Redis and PostGIS are performance enhancers, not functional requirements. The system operates in full graceful degradation mode: SQLite replaces PostGIS, cache-bypass replaces Redis, composite-only replaces ML models.
+**PRAKALP's approach:** The platform runs on a single-node deployment (SQLite + Python) with no external dependencies. Redis and PostGIS are performance enhancers, not functional requirements. The system operates in full graceful degradation mode: SQLite replaces PostGIS, cache-bypass replaces Redis, composite-only replaces ML models.
 
 ### 14.4 Rejected Approach: Satellite Imagery (Sentinel/MODIS) for Real-Time Flood Detection  
 
@@ -1028,7 +1029,7 @@ Accessible via `GET /api/admin/audit-log` (admin-only).
 - SAR processing requires GPU infrastructure and 30+ minute processing pipelines.
 - This approach detects *existing* floods, not *future* risk — violating the pre-disaster scope.
 
-**DisasterIQ's approach:** Rain forecasts from Open-Meteo (derived from ECMWF and GFS numerical weather models) provide 7-day forward-looking predictions at ward-level granularity, which is more operationally useful for pre-disaster planning.
+**PRAKALP's approach:** Rain forecasts from Open-Meteo (derived from ECMWF and GFS numerical weather models) provide 7-day forward-looking predictions at ward-level granularity, which is more operationally useful for pre-disaster planning.
 
 ### 14.5 Current Limitations
 
@@ -1077,11 +1078,11 @@ Accessible via `GET /api/admin/audit-log` (admin-only).
 
 ## 16. Conclusion
 
-DisasterIQ demonstrates that pre-disaster intelligence is not a theoretical aspiration but an engineering deliverable. This platform is operational today — 20 real Pune wards, real Open-Meteo weather data, real Census demographics, real historical disaster records, real SRTM elevations — producing continuously updated, explainable, ward-level risk scores with quantified confidence.
+PRAKALP demonstrates that pre-disaster intelligence is not a theoretical aspiration but an engineering deliverable. This platform is operational today — 20 real Pune wards, real Open-Meteo weather data, real Census demographics, real historical disaster records, real SRTM elevations — producing continuously updated, explainable, ward-level risk scores with quantified confidence.
 
 ### 16.1 Impact Quantification
 
-If DisasterIQ had been operational during the September 2019 Pune floods:
+If PRAKALP had been operational during the September 2019 Pune floods:
 
 - **Ward-level targeting:** The system would have identified Kasba Peth (W004), Bibwewadi (W005), and Sinhagad Road (W010) as critical-risk wards 12–24 hours before the event, based on cumulative rainfall forecasts.
 - **Delta surge alert:** The rapid risk increase (baseline 90 → event 90+) would have triggered critical alerts at the 48-hour forecast horizon.
@@ -1092,7 +1093,7 @@ The **estimated economic benefit** of ward-targeted pre-positioning for a single
 
 ### 16.2 Differentiation
 
-| Capability | Existing Solutions | DisasterIQ |
+| Capability | Existing Solutions | PRAKALP |
 |------------|-------------------|------------|
 | Granularity | City-level or district-level | Ward-level (sub-municipal) |
 | Temporal resolution | Static risk maps | 30-minute continuous refresh |
@@ -1105,7 +1106,7 @@ The **estimated economic benefit** of ward-targeted pre-positioning for a single
 
 ### 16.3 Call to Action
 
-DisasterIQ is production-ready for pilot deployment at the Pune Municipal Corporation Smart City Operations Centre. The platform requires:
+PRAKALP is production-ready for pilot deployment at the Pune Municipal Corporation Smart City Operations Centre. The platform requires:
 1. One Linux server (4 CPU, 8GB RAM) with PostgreSQL 16 installed.
 2. Network access to Open-Meteo API (free, no key required).
 3. One administrator to configure initial weights and validate first computation cycle.
@@ -1210,5 +1211,5 @@ $$C = \frac{1}{3}(D_{completeness} + T_{freshness} + M_{confidence})$$
 
 *End of Implementation Report*
 
-*DisasterIQ v2.0.0 — Pune Multi-Hazard Micro-Level Disaster Intelligence Platform*  
+*PRAKALP v2.0.0 — Predictive Risk Assessment And Knowledge Analytics For Localized Preparedness*  
 *Built with FastAPI, React, XGBoost, PostGIS, and Open-Meteo data integration.*

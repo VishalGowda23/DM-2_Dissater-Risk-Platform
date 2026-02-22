@@ -191,24 +191,35 @@ class CompositeRiskCalculator:
     # --- HEAT EVENT RISK ---
 
     def calculate_temp_anomaly_score(self, anomaly_c: float) -> float:
-        """Score temperature anomaly on 0-1 scale"""
-        if anomaly_c is None:
+        """Score temperature anomaly on 0-1 scale.
+
+        Calibrated so that normal daytime fluctuations (0-3 °C above daily
+        average baseline) barely register, while genuine heatwave conditions
+        (>5 °C above average) score highly.
+        """
+        if anomaly_c is None or anomaly_c < 0:
             return 0.0
-        if anomaly_c < 0:
-            return 0.0
-        elif anomaly_c < 2:
-            return anomaly_c / 2 * 0.2
-        elif anomaly_c < 4:
-            return 0.2 + (anomaly_c - 2) / 2 * 0.3
-        elif anomaly_c < 6:
-            return 0.5 + (anomaly_c - 4) / 2 * 0.3
+        if anomaly_c < 3:
+            # Normal daytime variation — very low score
+            return anomaly_c / 3 * 0.10
+        elif anomaly_c < 5:
+            # Notable — moderate concern
+            return 0.10 + (anomaly_c - 3) / 2 * 0.25
+        elif anomaly_c < 8:
+            # Significant — watch / warn
+            return 0.35 + (anomaly_c - 5) / 3 * 0.35
         else:
-            return min(1.0, 0.8 + (anomaly_c - 6) / 4 * 0.2)
+            # Extreme heatwave
+            return min(1.0, 0.70 + (anomaly_c - 8) / 4 * 0.30)
 
     def calculate_heat_event_risk(self, ward, weather_data: Optional[Dict] = None,
                                     baseline_vulnerability: float = 0.5) -> Dict:
         """
-        Heat Event = 0.70*TempAnomaly + 0.30*BaselineVulnerability
+        Heat Event = 0.55*TempAnomaly + 0.20*BaselineVulnerability + 0.25*UHI
+        
+        The UHI (Urban Heat Island) factor differentiates wards even when
+        they share identical temperature anomalies by using ward-specific
+        characteristics (impervious surface %, population density, elderly ratio).
         Returns: dict with event_risk, factors, weather info
         """
         factors = {}
@@ -236,10 +247,27 @@ class CompositeRiskCalculator:
             factors["temperature_anomaly"] = 0.0
             factors["baseline_vulnerability"] = round(baseline_vulnerability, 4)
 
-        w = self.heat_event_w
+        # --- Urban Heat Island (UHI) modifier ---
+        # Creates per-ward differentiation even when temp anomaly is uniform
+        impervious = (ward.impervious_surface_pct or 50) / 100
+        density_norm = min(1.0, (ward.population_density or 10000) / 35000)
+        elderly_norm = min(1.0, (ward.elderly_ratio or 0.10) / 0.20)
+        drainage = ward.drainage_index or 0.5
+
+        uhi_score = (
+            0.35 * impervious +          # heat absorption surfaces
+            0.25 * density_norm +         # urban density
+            0.20 * elderly_norm +         # demographic vulnerability
+            0.20 * (1 - drainage)         # poor infrastructure proxy
+        )
+        uhi_score = max(0.0, min(1.0, uhi_score))
+        factors["urban_heat_island"] = round(uhi_score, 4)
+
+        # Revised weights: anomaly 55%, baseline 20%, UHI 25%
         raw = (
-            w["temperature_anomaly"] * anomaly_score +
-            w["baseline_vulnerability"] * baseline_vulnerability
+            0.55 * anomaly_score +
+            0.20 * baseline_vulnerability +
+            0.25 * uhi_score
         )
 
         event_risk = round(min(100, max(0, raw * 100)), 2)
@@ -261,8 +289,9 @@ class CompositeRiskCalculator:
         delta = event_risk - baseline_risk
         delta_pct = (delta / baseline_risk * 100) if baseline_risk > 0 else 0
 
-        surge_alert = abs(delta_pct) >= settings.DELTA_SURGE_THRESHOLD
-        critical_alert = abs(delta_pct) >= settings.DELTA_CRITICAL_THRESHOLD
+        # Only trigger alerts on risk INCREASES (positive delta), not decreases
+        surge_alert = delta_pct >= settings.DELTA_SURGE_THRESHOLD
+        critical_alert = delta_pct >= settings.DELTA_CRITICAL_THRESHOLD
 
         if delta_pct >= settings.DELTA_CRITICAL_THRESHOLD:
             surge_level = "critical"

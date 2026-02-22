@@ -1,0 +1,80 @@
+{
+  "roc_auc": 0.9976,
+  "f1": 0.9667,
+  "precision": 0.9603,
+  "recall": 0.9732,
+  "confusion_matrix": [
+    [
+      245,
+      6
+    ],
+    [
+      4,
+      145
+    ]
+  ],
+  "classification_report": {
+    "0": {
+      "precision": 0.9839357429718876,
+      "recall": 0.9760956175298805,
+      "f1-score": 0.98,
+      "support": 251.0
+    },
+    "1": {
+      "precision": 0.9602649006622517,
+      "recall": 0.9731543624161074,
+      "f1-score": 0.9666666666666667,
+      "support": 149.0
+    },
+    "accuracy": 0.975,
+    "macro avg": {
+      "precision": 0.9721003218170696,
+      "recall": 0.974624989972994,
+      "f1-score": 0.9733333333333334,
+      "support": 400.0
+    },
+    "weighted avg": {
+      "precision": 0.9751183542115481,
+      "recall": 0.975,
+      "f1-score": 0.9750333333333333,
+      "support": 400.0
+    }
+  },
+  "n_train": 1600,
+  "n_test": 400,
+  "positive_rate": 0.3715,
+  "cv_auc_mean": 0.9969,
+  "cv_auc_std": 0.0019,
+  "feature_importance": {
+    "cumulative_rainfall_48h": 0.4466,
+    "rainfall_intensity": 0.3129,
+    "historical_frequency": 0.0502,
+    "drainage_index": 0.045,
+    "elevation_m": 0.0341,
+    "low_lying_index": 0.033,
+    "mean_slope": 0.0302,
+    "population_density": 0.0179,
+    "elderly_ratio": 0.0158,
+    "impervious_surface_pct": 0.0142,
+    "infrastructure_density": 0.0
+  },
+  "shap_importance": {
+    "rainfall_intensity": 3.3307,
+    "cumulative_rainfall_48h": 2.7521,
+    "elevation_m": 0.2672,
+    "mean_slope": 0.0723,
+    "population_density": 0.1119,
+    "infrastructure_density": 0.0,
+    "historical_frequency": 0.1397,
+    "drainage_index": 0.4456,
+    "impervious_surface_pct": 0.0773,
+    "low_lying_index": 0.1017,
+    "elderly_ratio": 0.1104
+  },
+  "heat_model": {
+    "roc_auc": 0.9696,
+    "f1": 0.8241,
+    "precision": 0.781,
+    "recall": 0.8723
+  }
+}

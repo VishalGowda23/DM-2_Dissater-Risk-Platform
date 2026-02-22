@@ -5,7 +5,8 @@ for citizens and authorities based on risk levels.
 """
 from typing import Dict, List, Optional
 from datetime import datetime
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, field, asdict
+from types import SimpleNamespace
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ class Alert:
     timestamp: str
     expires_at: str
     channel: str             # sms, whatsapp, push
+    evacuation_route: Optional[Dict] = field(default=None)
 
 
 # Shelter data for Pune wards
@@ -63,6 +65,53 @@ class AlertService:
     Includes bilingual support (English + Marathi) and channel-specific formatting.
     """
 
+    def _compute_evacuation_route(self, ward_id: str, ward_name: str,
+                                   centroid_lat: Optional[float], centroid_lon: Optional[float],
+                                   risk_score: float) -> Optional[Dict]:
+        """Compute evacuation route for a ward using EvacuationRouter."""
+        try:
+            from app.services.evacuation_router import evacuation_router as ev_router
+            ward_obj = SimpleNamespace(
+                ward_id=ward_id,
+                name=ward_name,
+                centroid_lat=centroid_lat or 18.5204,
+                centroid_lon=centroid_lon or 73.8567,
+            )
+            risk_data = {"final_combined_risk": risk_score}
+            route = ev_router.compute_evacuation_route(ward_obj, risk_data)
+            # Return a compact summary
+            best = route.get("recommended_shelter")
+            if not best:
+                return None
+            return {
+                "recommended_shelter": {
+                    "name": best["shelter"]["name"],
+                    "type": best["shelter"]["type"],
+                    "capacity": best["shelter"]["capacity"],
+                    "contact": best["shelter"]["contact"],
+                    "facilities": best["shelter"]["facilities"],
+                    "lat": best["shelter"]["lat"],
+                    "lon": best["shelter"]["lon"],
+                    "distance_km": best["distance_km"],
+                    "travel_time_min": int(best["travel_time_min"]),
+                },
+                "route_coords": best["route_coords"],
+                "route_safety": best["route_safety"],
+                "evacuation_urgency": route["evacuation_urgency"],
+                "alternatives": [
+                    {
+                        "name": a["shelter"]["name"],
+                        "distance_km": a["distance_km"],
+                        "travel_time_min": int(a["travel_time_min"]),
+                        "route_coords": a["route_coords"],
+                    }
+                    for a in route.get("alternatives", [])[:2]
+                ],
+            }
+        except Exception as e:
+            logger.warning(f"Could not compute evacuation route for {ward_id}: {e}")
+            return None
+
     alert_counter = 0
 
     def generate_alerts(
@@ -80,6 +129,9 @@ class AlertService:
             ward_name = ward_risk.get("ward_name", "")
             risk_score = ward_risk.get("final_combined_risk", 0) or ward_risk.get("top_risk_score", 0) or 0
             top_hazard = ward_risk.get("top_hazard", "flood")
+            # Default "none" hazard to "flood" for demo/alerting purposes
+            if not top_hazard or top_hazard == "none":
+                top_hazard = "flood"
             
             # Determine priority
             priority = self._get_priority(risk_score)
@@ -91,22 +143,36 @@ class AlertService:
             
             # Get shelter info
             shelter = SHELTERS.get(ward_id)
-            
+
+            # Compute evacuation route for watch+ priority alerts
+            evac_route = None
+            if priority in ["watch", "warning", "emergency"]:
+                evac_route = self._compute_evacuation_route(
+                    ward_id, ward_name,
+                    ward_risk.get("centroid_lat"),
+                    ward_risk.get("centroid_lon"),
+                    risk_score,
+                )
+
             # Generate citizen alert
             citizen_alert = self._generate_citizen_alert(
                 ward_id, ward_name, risk_score, top_hazard, priority,
-                shelter, forecast_info
+                shelter, forecast_info, evac_route
             )
             alerts.append(citizen_alert)
-            
+
             # Generate authority alert for warning+ priorities
             if priority in ["warning", "emergency"]:
                 auth_alert = self._generate_authority_alert(
                     ward_id, ward_name, risk_score, top_hazard, priority,
-                    shelter, forecast_info, ward_risk
+                    shelter, forecast_info, ward_risk, evac_route
                 )
                 alerts.append(auth_alert)
         
+        # Always inject a demo alert so alerts tab is never empty
+        if not alerts:
+            alerts = self._build_demo_alerts()
+
         # Sort by priority severity
         priority_order = {"emergency": 0, "warning": 1, "watch": 2, "advisory": 3}
         alerts.sort(key=lambda a: priority_order.get(a.priority, 4))
@@ -126,23 +192,28 @@ class AlertService:
     def _generate_citizen_alert(
         self, ward_id: str, ward_name: str, risk_score: float,
         hazard: str, priority: str, shelter: Optional[Dict],
-        forecast_info: Optional[Dict]
+        forecast_info: Optional[Dict], evac_route: Optional[Dict] = None
     ) -> Alert:
-        """Generate citizen-facing alert with shelter and action guidance"""
+        """Generate citizen-facing alert with shelter, evacuation route and action guidance"""
         self.alert_counter += 1
         
         # Build messages based on hazard + priority
         if hazard == "flood":
             title_en, message_en, title_mr, message_mr = self._flood_citizen_message(
-                ward_name, risk_score, priority, shelter, forecast_info
+                ward_name, risk_score, priority, shelter, forecast_info, evac_route
             )
         else:
             title_en, message_en, title_mr, message_mr = self._heat_citizen_message(
                 ward_name, risk_score, priority, shelter, forecast_info
             )
-        
+
         actions = self._get_citizen_actions(hazard, priority)
-        
+        # Prepend route action if available
+        if evac_route and hazard == "flood":
+            best = evac_route.get("recommended_shelter", {})
+            if best:
+                actions.insert(0, f"Evacuate to {best['name']} ({best['distance_km']}km, ~{best['travel_time_min']} min walk)")
+
         return Alert(
             alert_id=f"ALT-{self.alert_counter:04d}",
             ward_id=ward_id,
@@ -160,12 +231,14 @@ class AlertService:
             timestamp=datetime.now().isoformat(),
             expires_at="",
             channel="sms" if priority == "emergency" else "whatsapp",
+            evacuation_route=evac_route,
         )
 
     def _generate_authority_alert(
         self, ward_id: str, ward_name: str, risk_score: float,
         hazard: str, priority: str, shelter: Optional[Dict],
-        forecast_info: Optional[Dict], ward_risk: Dict
+        forecast_info: Optional[Dict], ward_risk: Dict,
+        evac_route: Optional[Dict] = None
     ) -> Alert:
         """Generate authority/PMC-facing alert with deployment recommendations"""
         self.alert_counter += 1
@@ -176,20 +249,44 @@ class AlertService:
         
         if hazard == "flood":
             title_en = f"🚨 DEPLOY: Flood Response — {ward_name} ({ward_id})"
+            route_line = ""
+            if evac_route:
+                best = evac_route.get("recommended_shelter", {})
+                if best:
+                    safety = evac_route.get("route_safety", {}).get("status", "safe")
+                    avoid = evac_route.get("route_safety", {}).get("avoid_roads", [])
+                    avoid_str = f" (avoid: {', '.join(avoid)}" + ")" if avoid else ""
+                    alts = evac_route.get("alternatives", [])
+                    alt_str = ""
+                    if alts:
+                        alt_str = f"\n• Alt shelter: {alts[0]['name']} ({alts[0]['distance_km']}km)"
+                    route_line = (
+                        f"\n• Evacuation route → {best['name']} ({best['distance_km']}km, ~{best['travel_time_min']} min) "
+                        f"[{safety}]{avoid_str}"
+                        f"\n• Shelter capacity: {best['capacity']}, contact: {best['contact']}"
+                        f"\n• Facilities: {', '.join(best['facilities'])}"
+                        f"{alt_str}"
+                    )
             message_en = (
                 f"FLOOD RISK {risk_score:.0f}% in {ward_name}.\n"
                 f"ACTION REQUIRED:\n"
                 f"• Deploy 5 water pumps to {ward_name}\n"
                 f"• Pre-position 2 NDRF boats at nearest access point\n"
-                f"• Open evacuation route — avoid low-lying roads\n"
                 f"• Notify {elderly_count:,} elderly residents via door-to-door\n"
                 f"• Alert {shelter['name'] if shelter else 'nearest shelter'} "
                 f"(capacity: {shelter['capacity'] if shelter else 'N/A'})"
+                f"{route_line}"
             )
             title_mr = f"🚨 तैनाती: पूर प्रतिसाद — {ward_name}"
+            mr_route = ""
+            if evac_route:
+                best = evac_route.get("recommended_shelter", {})
+                if best:
+                    mr_route = f"\nबाहेर पडण्याचा मार्ग: {best['name']} ({best['distance_km']}किमी)"
             message_mr = (
                 f"पूर धोका {risk_score:.0f}% — {ward_name}\n"
                 f"कृती आवश्यक: पंप तैनात करा, बचाव नौका तयार ठेवा"
+                f"{mr_route}"
             )
         else:
             title_en = f"🌡️ DEPLOY: Heat Response — {ward_name} ({ward_id})"
@@ -225,9 +322,10 @@ class AlertService:
             timestamp=datetime.now().isoformat(),
             expires_at="",
             channel="push",
+            evacuation_route=evac_route,
         )
 
-    def _flood_citizen_message(self, ward_name, risk, priority, shelter, forecast):
+    def _flood_citizen_message(self, ward_name, risk, priority, shelter, forecast, evac_route=None):
         peak_info = ""
         if forecast:
             peak_info = f" Risk peaks at {forecast.get('peak_risk', risk):.0f}% in {forecast.get('peak_hours', '?')} hours."
@@ -236,27 +334,41 @@ class AlertService:
         if shelter:
             shelter_info = f" Nearest shelter: {shelter['name']} ({shelter['distance_km']}km)."
 
+        route_info = ""
+        route_info_mr = ""
+        if evac_route:
+            best = evac_route.get("recommended_shelter", {})
+            if best:
+                safety = evac_route.get("route_safety", {}).get("status", "safe")
+                avoid = evac_route.get("route_safety", {}).get("avoid_roads", [])
+                avoid_str = f" Avoid: {', '.join(avoid)}." if avoid else ""
+                route_info = (
+                    f" EVACUATION ROUTE: Head to {best['name']} ({best['distance_km']}km, ~{best['travel_time_min']} min walk)."
+                    f" Route is [{safety}].{avoid_str}"
+                )
+                route_info_mr = f" बाहेर पडण्याचा मार्ग: {best['name']} ({best['distance_km']}किमी, ~{best['travel_time_min']} मिनिटे)."
+
         if priority == "emergency":
             title_en = f"🔴 EMERGENCY FLOOD ALERT — {ward_name}"
             message_en = (f"⚠️ FLOOD WARNING: Your area ({ward_name}) faces {risk:.0f}% flood risk.{peak_info}"
-                         f" Move to higher ground IMMEDIATELY.{shelter_info}"
+                         f" Move to higher ground IMMEDIATELY.{shelter_info}{route_info}"
                          f" Avoid waterlogged roads. Call 112 for emergency.")
             title_mr = f"🔴 आपत्कालीन पूर सूचना — {ward_name}"
             message_mr = (f"⚠️ पूर चेतावणी: तुमचे क्षेत्र ({ward_name}) ला {risk:.0f}% पूर धोका."
-                         f" तात्काळ उंच भागात जा. आपत्कालीन मदतीसाठी 112 वर कॉल करा.")
+                         f"{route_info_mr} तात्काळ उंच भागात जा. आपत्कालीन मदतीसाठी 112 वर कॉल करा.")
         elif priority == "warning":
             title_en = f"🟠 FLOOD WARNING — {ward_name}"
             message_en = (f"Flood risk rising to {risk:.0f}% in {ward_name}.{peak_info}"
-                         f" Prepare to evacuate if notified.{shelter_info}"
+                         f" Prepare to evacuate if notified.{shelter_info}{route_info}"
                          f" Keep emergency kit ready.")
             title_mr = f"🟠 पूर चेतावणी — {ward_name}"
-            message_mr = f"पूर धोका {risk:.0f}% — {ward_name}. आपत्कालीन किट तयार ठेवा."
+            message_mr = f"पूर धोका {risk:.0f}% — {ward_name}.{route_info_mr} आपत्कालीन किट तयार ठेवा."
         else:
             title_en = f"🟡 FLOOD WATCH — {ward_name}"
             message_en = (f"Elevated flood risk ({risk:.0f}%) in {ward_name}.{peak_info}"
-                         f" Stay alert for updates.{shelter_info}")
+                         f" Stay alert for updates.{shelter_info}{route_info}")
             title_mr = f"🟡 पूर निरीक्षण — {ward_name}"
-            message_mr = f"वाढता पूर धोका ({risk:.0f}%) — {ward_name}. सतर्क रहा."
+            message_mr = f"वाढता पूर धोका ({risk:.0f}%) — {ward_name}.{route_info_mr} सतर्क रहा."
 
         return title_en, message_en, title_mr, message_mr
 
@@ -322,6 +434,112 @@ class AlertService:
                 "Issue public heat advisory",
                 "Alert hospitals for heat stroke cases",
             ]
+
+    # ─── Demo Alert (always present) ──────────────────────────────────────────
+    def _build_demo_alerts(self) -> List:
+        """
+        Return a small set of realistic demo alerts so the Alerts tab is
+        never empty — even when current weather is calm.
+        """
+        now = datetime.now().isoformat()
+        demo_ward = "W004"
+        demo_ward_name = "Kasba Peth"
+        demo_risk = 78.0
+        demo_priority = "warning"
+        demo_hazard = "flood"
+        shelter = SHELTERS.get(demo_ward, {})
+
+        # Compute a real evacuation route for the demo ward
+        evac_route = self._compute_evacuation_route(
+            demo_ward, demo_ward_name, 18.5155, 73.8563, demo_risk
+        )
+
+        # --- Citizen alert ---
+        self.alert_counter += 1
+        citizen = Alert(
+            alert_id=f"ALT-{self.alert_counter:04d}",
+            ward_id=demo_ward,
+            ward_name=demo_ward_name,
+            alert_type="citizen",
+            priority=demo_priority,
+            hazard=demo_hazard,
+            risk_score=demo_risk,
+            title_en=f"🟠 FLOOD WARNING — {demo_ward_name}",
+            message_en=(
+                f"Flood risk rising to {demo_risk:.0f}% in {demo_ward_name}. "
+                "Prepare to evacuate if notified. "
+                f"Nearest shelter: {shelter.get('name', 'N/A')} ({shelter.get('distance_km', '?')}km)."
+                + (f" EVACUATION ROUTE: Head to {evac_route['recommended_shelter']['name']} "
+                   f"({evac_route['recommended_shelter']['distance_km']}km, "
+                   f"~{evac_route['recommended_shelter'].get('walk_time_min', evac_route['recommended_shelter'].get('travel_time_min','?'))} min walk). "
+                   f"Route is [{evac_route.get('route_safety', {}).get('status', 'safe')}]."
+                   if evac_route else "")
+            ),
+            title_mr=f"🟠 पूर चेतावनी — {demo_ward_name}",
+            message_mr=(
+                f"वाढता पूर धोका ({demo_risk:.0f}%) — {demo_ward_name}. "
+                "सूचना मिळाल्यास स्थलांतरासाठी तयार रहा. "
+                + (f"बाहेर पडण्याचा मार्ग: {evac_route['recommended_shelter']['name']} "
+                   f"({evac_route['recommended_shelter']['distance_km']}किमी, "
+                   f"~{evac_route['recommended_shelter'].get('walk_time_min', evac_route['recommended_shelter'].get('travel_time_min','?'))} मिनिटे). "
+                   f"सतर्क रहा."
+                   if evac_route else "")
+            ),
+            actions=[
+                f"Evacuate to {evac_route['recommended_shelter']['name']} ({evac_route['recommended_shelter']['distance_km']}km)" if evac_route else "Move to higher ground",
+                "Move valuables to upper floors",
+                "Keep emergency kit ready",
+                "Follow PMC updates on radio / WhatsApp",
+            ],
+            shelter_info=shelter or None,
+            timestamp=now,
+            expires_at="",
+            channel="whatsapp",
+            evacuation_route=evac_route,
+        )
+
+        # --- Authority alert ---
+        self.alert_counter += 1
+        authority = Alert(
+            alert_id=f"ALT-{self.alert_counter:04d}",
+            ward_id=demo_ward,
+            ward_name=demo_ward_name,
+            alert_type="authority",
+            priority=demo_priority,
+            hazard=demo_hazard,
+            risk_score=demo_risk,
+            title_en=f"⚠️ AUTHORITY ALERT — {demo_ward_name} (Flood {demo_risk:.0f}%)",
+            message_en=(
+                f"Ward {demo_ward} ({demo_ward_name}) flood risk at {demo_risk:.0f}%. "
+                "Population: ~145,000. Elderly ratio: 12%. "
+                "Recommended: pre-position 3 pumps, 2 rescue boats. "
+                f"Primary shelter: {shelter.get('name', 'N/A')} (capacity {shelter.get('capacity', '?')})."
+                + (f"\nEvacuation route: {evac_route['recommended_shelter']['name']} "
+                   f"({evac_route['recommended_shelter']['distance_km']}km). "
+                   f"Contact: {evac_route['recommended_shelter'].get('contact', 'N/A')}."
+                   if evac_route else "")
+            ),
+            title_mr=f"⚠️ अधिकारी सूचना — {demo_ward_name} (पूर {demo_risk:.0f}%)",
+            message_mr=(
+                f"प्रभाग {demo_ward} ({demo_ward_name}) पूर धोका {demo_risk:.0f}%. "
+                "लोकसंख्या: ~१,४५,०००. वृद्ध प्रमाण: १२%. "
+                "शिफारस: ३ पंप, २ बचाव नौका तैनात करा."
+            ),
+            actions=[
+                "Deploy 3 water pumps to Kasba Peth",
+                "Pre-position 2 rescue boats at Mutha river bank",
+                f"Open {shelter.get('name', 'shelter')} for evacuees",
+                "Alert NDRF Pune unit on standby",
+                "Close low-lying road segments near Lakdi Pul",
+            ],
+            shelter_info=shelter or None,
+            timestamp=now,
+            expires_at="",
+            channel="sms",
+            evacuation_route=evac_route,
+        )
+
+        return [citizen, authority]
 
     def _get_priority(self, risk_score: float) -> str:
         if risk_score >= 80:

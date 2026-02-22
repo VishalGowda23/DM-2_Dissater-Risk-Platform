@@ -1,5 +1,5 @@
 """
-Core configuration for Disaster Intelligence Platform
+Core configuration for PRAKALP
 """
 from pydantic_settings import BaseSettings
 from typing import Optional
@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # Application
-    APP_NAME: str = "Disaster Intelligence Platform"
+    APP_NAME: str = "PRAKALP"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "production"
@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     
     # CORS
     CORS_ORIGINS: list = ["http://localhost:5173", "http://localhost:3000"]
+
+    # Twilio (SMS / WhatsApp alerts)
+    TWILIO_ACCOUNT_SID: Optional[str] = None
+    TWILIO_AUTH_TOKEN: Optional[str] = None
+    TWILIO_SMS_FROM: Optional[str] = None        # e.g. "+1XXXXXXXXXX"
+    TWILIO_WHATSAPP_FROM: Optional[str] = None   # e.g. "whatsapp:+14155238886"
     
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
@@ -89,6 +95,7 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        extra = "ignore"
         case_sensitive = True
 
 

@@ -192,7 +192,33 @@ class ResourceAllocator:
         """
         scenario = scenario_params or {}
         use_delta = scenario.get("use_delta", False)
-        
+
+        # Check if any ward exceeds the low-risk threshold before allocating
+        max_risk = max(
+            (max(w.get("flood_risk", 0), w.get("heat_risk", 0)) for w in ward_data),
+            default=0
+        )
+        if max_risk < settings.RISK_LOW_THRESHOLD:
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "scenario": scenario,
+                "total_resources": resources_available,
+                "total_allocated": {k: 0 for k in resources_available},
+                "ward_allocations": [],
+                "explanations": [
+                    f"No resources deployed — all ward risk scores are below the activation threshold ({settings.RISK_LOW_THRESHOLD}). "
+                    f"Current maximum risk: {max_risk:.1f}."
+                ],
+                "summary": {
+                    "total_wards": len(ward_data),
+                    "critical_wards": 0,
+                    "highest_need_ward": None,
+                    "allocation_skipped": True,
+                    "max_risk": round(max_risk, 1),
+                    "activation_threshold": settings.RISK_LOW_THRESHOLD,
+                }
+            }
+
         # Build ward needs
         ward_needs = []
         for ward in ward_data:

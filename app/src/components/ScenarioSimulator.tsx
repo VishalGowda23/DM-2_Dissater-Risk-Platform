@@ -1,19 +1,29 @@
 import { useState } from 'react';
-import { Activity, Play, RotateCcw, Droplets, Thermometer, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Activity, Play, RotateCcw, Droplets, Thermometer, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
+import { useLang, wardName, type TranslationKey } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { API_BASE_URL, type RiskData, type Ward, type ScenarioResult, getRiskColor } from '../lib/types';
 import { toast } from 'sonner';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 
 interface ScenarioSimulatorProps {
   riskData: RiskData[];
   wards: Ward[];
 }
 
+const PRESETS = [
+  { labelKey: 'presetHeavyMonsoon' as TranslationKey, icon: '🌧️', rain: 2.5, temp: 0, drain: 1.0, pop: 0, descKey: 'presetHeavyMonsoonDesc' as TranslationKey },
+  { labelKey: 'presetCloudburst' as TranslationKey, icon: '⛈️', rain: 3.0, temp: 0, drain: 0.7, pop: 0, descKey: 'presetCloudburstDesc' as TranslationKey },
+  { labelKey: 'presetHeatwave' as TranslationKey, icon: '🔥', rain: 1.0, temp: 6, drain: 1.0, pop: 0, descKey: 'presetHeatwaveDesc' as TranslationKey },
+  { labelKey: 'presetCompound' as TranslationKey, icon: '⚠️', rain: 2.0, temp: 3, drain: 0.8, pop: 10, descKey: 'presetCompoundDesc' as TranslationKey },
+  { labelKey: 'presetDrainage' as TranslationKey, icon: '🔧', rain: 1.0, temp: 0, drain: 1.4, pop: 0, descKey: 'presetDrainageDesc' as TranslationKey },
+];
+
 export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimulatorProps) {
+  const { t, lang } = useLang();
   const [rainfallMultiplier, setRainfallMultiplier] = useState(1.0);
   const [tempAnomaly, setTempAnomaly] = useState(0);
   const [drainageEfficiency, setDrainageEfficiency] = useState(1.0);
@@ -21,6 +31,16 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScenarioResult | null>(null);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+
+  const applyPreset = (preset: typeof PRESETS[0]) => {
+    setRainfallMultiplier(preset.rain);
+    setTempAnomaly(preset.temp);
+    setDrainageEfficiency(preset.drain);
+    setPopulationGrowth(preset.pop);
+    setActivePreset(t(preset.labelKey));
+    setResult(null);
+  };
 
   const runScenario = async () => {
     setLoading(true);
@@ -42,12 +62,12 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
       if (res.ok) {
         const data = await res.json();
         setResult(data);
-        toast.success('Scenario simulation complete!');
+        toast.success(t('scenarioSuccess'));
       } else {
-        toast.error('Scenario simulation failed');
+        toast.error(t('scenarioFailed'));
       }
     } catch (error) {
-      toast.error('Error running scenario');
+      toast.error(t('scenarioError'));
     } finally {
       setLoading(false);
     }
@@ -59,17 +79,42 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
     setDrainageEfficiency(1.0);
     setPopulationGrowth(0);
     setResult(null);
+    setActivePreset(null);
   };
+
+  const isNeutral = rainfallMultiplier === 1.0 && tempAnomaly === 0 && drainageEfficiency === 1.0 && populationGrowth === 0;
 
   const getScenarioChartData = () => {
     if (!result?.results) return [];
 
-    return result.results.slice(0, 10).map(item => ({
-      name: item.baseline.ward_name,
-      baseline: item.baseline.top_risk_score,
-      scenario: item.scenario.top_risk_score,
-      delta: item.scenario.top_risk_score - item.baseline.top_risk_score
-    }));
+    // Show top 10 wards sorted by absolute combined delta (most impacted first)
+    return result.results.slice(0, 10).map(item => {
+      const floodDelta = (item.scenario.flood?.delta ?? 0);
+      const heatDelta = (item.scenario.heat?.delta ?? 0);
+      const wn = wardName(item.baseline, lang);
+      return {
+        name: wn.length > 12
+          ? wn.slice(0, 11) + '…'
+          : wn,
+        fullName: wn,
+        [t('floodDeltaHeader')]: Number(floodDelta.toFixed(1)),
+        [t('heatDeltaHeader')]: Number(heatDelta.toFixed(1)),
+        baselineRisk: item.baseline.top_risk_score,
+        scenarioRisk: item.scenario.top_risk_score,
+      };
+    });
+  };
+
+  const getScenarioDescription = (): string => {
+    if (isNeutral) return t('scenarioDescNeutral');
+    const parts: string[] = [];
+    if (rainfallMultiplier > 1) parts.push(`${rainfallMultiplier.toFixed(1)}× ${t('scenarioDescRainfall')}`);
+    if (rainfallMultiplier < 1) parts.push(`${t('scenarioDescReducedRain')} (${rainfallMultiplier.toFixed(1)}×)`);
+    if (tempAnomaly > 0) parts.push(`+${tempAnomaly}°C ${t('scenarioDescTempRise')}`);
+    if (drainageEfficiency < 1) parts.push(`${t('scenarioDescDegradedDrain')} (${((1 - drainageEfficiency) * 100).toFixed(0)}%)`);
+    if (drainageEfficiency > 1) parts.push(`${t('scenarioDescImprovedDrain')} (+${((drainageEfficiency - 1) * 100).toFixed(0)}%)`);
+    if (populationGrowth > 0) parts.push(`${populationGrowth}% ${t('scenarioDescPopGrowth')}`);
+    return `${t('scenarioDescSimulating')} ${parts.join(' + ')}`;
   };
 
   return (
@@ -79,16 +124,43 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
         <CardHeader>
           <CardTitle className="font-black uppercase flex items-center gap-2">
             <Activity className="w-5 h-5" />
-            Scenario Parameters
+            {t('scenarioParams')}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-8">
+          {/* Quick Presets */}
+          <div className="mb-6">
+            <div className="text-xs font-bold uppercase text-gray-500 mb-2">{t('quickPresets')}</div>
+            <div className="flex flex-wrap gap-2">
+              {PRESETS.map(p => (
+                <button
+                  key={p.labelKey}
+                  onClick={() => applyPreset(p)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border-2 transition-colors ${
+                    activePreset === t(p.labelKey)
+                      ? 'border-black bg-black text-white'
+                      : 'border-gray-300 bg-white hover:border-black'
+                  }`}
+                  title={t(p.descKey)}
+                >
+                  <span>{p.icon}</span> {t(p.labelKey)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Scenario description */}
+          <div className="mb-6 px-3 py-2 bg-gray-50 border border-gray-200 text-sm text-gray-700">
+            <Zap className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-gray-500" />
+            {getScenarioDescription()}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
             {/* Rainfall Multiplier */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label icon={<Droplets className="w-4 h-4 text-blue-500" />}>
-                  Rainfall Multiplier
+                  {t('rainfallMultiplier')}
                 </Label>
                 <Badge variant="outline" className="rounded-none font-mono">
                   {rainfallMultiplier.toFixed(1)}x
@@ -102,9 +174,9 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
                 step={0.1}
               />
               <div className="flex justify-between text-xs text-gray-500">
-                <span>0.5x (Drought)</span>
-                <span>1.0x (Normal)</span>
-                <span>3.0x (Extreme)</span>
+                <span>0.5x ({t('sliderDrought')})</span>
+                <span>1.0x ({t('sliderNormal')})</span>
+                <span>3.0x ({t('sliderExtreme')})</span>
               </div>
             </div>
 
@@ -112,7 +184,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label icon={<Thermometer className="w-4 h-4 text-orange-500" />}>
-                  Temperature Anomaly
+                  {t('tempAnomaly')}
                 </Label>
                 <Badge variant="outline" className="rounded-none font-mono">
                   +{tempAnomaly.toFixed(1)}°C
@@ -126,9 +198,9 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
                 step={0.5}
               />
               <div className="flex justify-between text-xs text-gray-500">
-                <span>0°C (Normal)</span>
-                <span>+5°C (Heatwave)</span>
-                <span>+10°C (Extreme)</span>
+                <span>0°C ({t('sliderNormal')})</span>
+                <span>+5°C ({t('sliderHeatwave')})</span>
+                <span>+10°C ({t('sliderExtreme')})</span>
               </div>
             </div>
 
@@ -136,7 +208,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label icon={<TrendingUp className="w-4 h-4 text-green-500" />}>
-                  Drainage Efficiency
+                  {t('drainageEfficiency')}
                 </Label>
                 <Badge variant="outline" className="rounded-none font-mono">
                   {drainageEfficiency.toFixed(1)}x
@@ -150,9 +222,9 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
                 step={0.1}
               />
               <div className="flex justify-between text-xs text-gray-500">
-                <span>0.5x (Blocked)</span>
-                <span>1.0x (Normal)</span>
-                <span>1.5x (Improved)</span>
+                <span>0.5x ({t('sliderBlocked')})</span>
+                <span>1.0x ({t('sliderNormal')})</span>
+                <span>1.5x ({t('sliderImproved')})</span>
               </div>
             </div>
 
@@ -160,7 +232,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label icon={<Activity className="w-4 h-4 text-purple-500" />}>
-                  Population Growth
+                  {t('populationGrowthLabel')}
                 </Label>
                 <Badge variant="outline" className="rounded-none font-mono">
                   +{populationGrowth.toFixed(0)}%
@@ -174,9 +246,9 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
                 step={5}
               />
               <div className="flex justify-between text-xs text-gray-500">
-                <span>0% (Current)</span>
-                <span>25% (Growth)</span>
-                <span>50% (Rapid)</span>
+                <span>0% ({t('sliderCurrent')})</span>
+                <span>25% ({t('sliderGrowth')})</span>
+                <span>50% ({t('sliderRapid')})</span>
               </div>
             </div>
           </div>
@@ -192,7 +264,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
               ) : (
                 <Play className="w-4 h-4 mr-2" />
               )}
-              Run Scenario Simulation
+              {t('runScenario')}
             </Button>
             <Button
               onClick={resetScenario}
@@ -200,7 +272,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
               className="border-2 border-black rounded-none font-bold"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
-              Reset
+              {t('resetLabel')}
             </Button>
           </div>
         </CardContent>
@@ -210,13 +282,13 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
       {result && result.aggregate_impact && (
         <div className="space-y-6">
           {/* Impact Summary */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className={`border-2 rounded-none ${result.aggregate_impact.avg_flood_risk_change > 10
                 ? 'border-red-500 bg-red-50'
                 : 'border-black'
               }`}>
               <CardContent className="pt-6">
-                <div className="text-sm text-gray-500 uppercase font-bold">Flood Risk Change</div>
+                <div className="text-sm text-gray-500 uppercase font-bold">{t('floodRiskChange')}</div>
                 <div className={`text-3xl font-black ${result.aggregate_impact.avg_flood_risk_change > 10 ? 'text-red-600' : ''
                   }`}>
                   {result.aggregate_impact.avg_flood_risk_change > 0 ? '+' : ''}
@@ -230,7 +302,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
                 : 'border-black'
               }`}>
               <CardContent className="pt-6">
-                <div className="text-sm text-gray-500 uppercase font-bold">Heat Risk Change</div>
+                <div className="text-sm text-gray-500 uppercase font-bold">{t('heatRiskChange')}</div>
                 <div className={`text-3xl font-black ${result.aggregate_impact.avg_heat_risk_change > 10 ? 'text-orange-600' : ''
                   }`}>
                   {result.aggregate_impact.avg_heat_risk_change > 0 ? '+' : ''}
@@ -244,7 +316,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
                 : 'border-black'
               }`}>
               <CardContent className="pt-6">
-                <div className="text-sm text-gray-500 uppercase font-bold">Newly Critical Wards</div>
+                <div className="text-sm text-gray-500 uppercase font-bold">{t('newlyCriticalWards')}</div>
                 <div className={`text-3xl font-black ${result.aggregate_impact.wards_newly_critical > 0 ? 'text-red-600' : ''
                   }`}>
                   {result.aggregate_impact.wards_newly_critical}
@@ -254,7 +326,7 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
 
             <Card className="border-2 border-black rounded-none">
               <CardContent className="pt-6">
-                <div className="text-sm text-gray-500 uppercase font-bold">Total Wards</div>
+                <div className="text-sm text-gray-500 uppercase font-bold">{t('totalWards')}</div>
                 <div className="text-3xl font-black">
                   {result.aggregate_impact.total_wards}
                 </div>
@@ -269,10 +341,9 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
                 <div className="flex items-center gap-3">
                   <AlertTriangle className="w-8 h-8 text-red-600" />
                   <div>
-                    <h3 className="font-bold text-red-600 uppercase">High Impact Scenario</h3>
+                    <h3 className="font-bold text-red-600 uppercase">{t('highImpactScenario')}</h3>
                     <p className="text-sm text-red-700">
-                      This scenario shows significant risk increases. Consider pre-positioning resources
-                      and activating emergency protocols.
+                      {t('highImpactDesc')}
                     </p>
                   </div>
                 </div>
@@ -282,18 +353,29 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
           {/* Comparison Chart */}
           <Card className="border-2 border-black rounded-none">
             <CardHeader>
-              <CardTitle className="font-black uppercase">Top 10 Wards: Baseline vs Scenario</CardTitle>
+              <CardTitle className="font-black uppercase">{t('riskChangeByWard')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={getScenarioChartData()}>
+                  <BarChart data={getScenarioChartData()} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" height={80} />
-                    <YAxis domain={[0, 100]} />
-                    <Tooltip />
-                    <Bar dataKey="baseline" name="Baseline" fill="#6b7280" />
-                    <Bar dataKey="scenario" name="Scenario" fill="#ef4444" />
+                    <XAxis type="number" domain={['auto', 'auto']} tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}`} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={110} />
+                    <Tooltip
+                      formatter={(value: number, name: string) => [`${value > 0 ? '+' : ''}${value.toFixed(1)}`, name]}
+                    />
+                    <Legend />
+                    <Bar dataKey={t('floodDeltaHeader')} fill="#3b82f6" radius={[0, 2, 2, 0]}>
+                      {getScenarioChartData().map((entry, idx) => (
+                        <Cell key={idx} fill={(entry as any)[t('floodDeltaHeader')] >= 0 ? '#3b82f6' : '#93c5fd'} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey={t('heatDeltaHeader')} fill="#f97316" radius={[0, 2, 2, 0]}>
+                      {getScenarioChartData().map((entry, idx) => (
+                        <Cell key={idx} fill={(entry as any)[t('heatDeltaHeader')] >= 0 ? '#f97316' : '#fdba74'} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -304,65 +386,86 @@ export default function ScenarioSimulator({ riskData: _riskData }: ScenarioSimul
           {result.results && (
             <Card className="border-2 border-black rounded-none">
               <CardHeader>
-                <CardTitle className="font-black uppercase">Detailed Ward Impact</CardTitle>
+                <CardTitle className="font-black uppercase">{t('detailedWardImpact')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b-2 border-black bg-gray-100">
-                        <th className="text-left py-3 px-4 font-bold">Ward</th>
-                        <th className="text-right py-3 px-4 font-bold">Baseline Risk</th>
-                        <th className="text-right py-3 px-4 font-bold">Scenario Risk</th>
-                        <th className="text-right py-3 px-4 font-bold">Change</th>
-                        <th className="text-center py-3 px-4 font-bold">Status</th>
+                        <th className="text-left py-3 px-4 font-bold">{t('ward')}</th>
+                        <th className="text-right py-3 px-4 font-bold">{t('baseline')}</th>
+                        <th className="text-right py-3 px-4 font-bold">{t('scenario')}</th>
+                        <th className="text-right py-3 px-4 font-bold">
+                          <span className="text-blue-600">{t('floodDeltaHeader')}</span>
+                        </th>
+                        <th className="text-right py-3 px-4 font-bold">
+                          <span className="text-orange-600">{t('heatDeltaHeader')}</span>
+                        </th>
+                        <th className="text-center py-3 px-4 font-bold">{t('status')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {result.results.map(({ baseline, scenario }) => {
-                        const change = scenario.top_risk_score - baseline.top_risk_score;
+                        const floodDelta = scenario.flood?.delta ?? 0;
+                        const heatDelta = scenario.heat?.delta ?? 0;
+                        const combinedChange = scenario.top_risk_score - baseline.top_risk_score;
                         const isCritical = scenario.top_risk_score > 80 && baseline.top_risk_score <= 80;
 
                         return (
                           <tr key={baseline.ward_id} className="border-b border-gray-200">
-                            <td className="py-3 px-4 font-medium">{baseline.ward_name}</td>
+                            <td className="py-3 px-4 font-medium">{wardName(baseline, lang)}</td>
                             <td className="py-3 px-4 text-right">
                               <span
-                                className="px-2 py-1 font-bold"
+                                className="px-2 py-1 font-bold text-xs"
                                 style={{
                                   backgroundColor: getRiskColor(baseline.top_risk_score),
                                   color: baseline.top_risk_score > 60 ? 'white' : 'black'
                                 }}
                               >
-                                {baseline.top_risk_score?.toFixed(0)}%
+                                {baseline.top_risk_score?.toFixed(1)}
                               </span>
                             </td>
                             <td className="py-3 px-4 text-right">
                               <span
-                                className="px-2 py-1 font-bold"
+                                className="px-2 py-1 font-bold text-xs"
                                 style={{
                                   backgroundColor: getRiskColor(scenario.top_risk_score),
                                   color: scenario.top_risk_score > 60 ? 'white' : 'black'
                                 }}
                               >
-                                {scenario.top_risk_score?.toFixed(0)}%
+                                {scenario.top_risk_score?.toFixed(1)}
                               </span>
                             </td>
                             <td className="py-3 px-4 text-right">
-                              <span className={`font-mono font-bold ${change > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {change > 0 ? '+' : ''}{change.toFixed(1)}%
+                              <span className={`font-mono font-bold text-sm ${floodDelta > 0.5 ? 'text-blue-700' : floodDelta < -0.5 ? 'text-blue-400' : 'text-gray-400'}`}>
+                                {floodDelta > 0 ? '+' : ''}{floodDelta.toFixed(1)}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className={`font-mono font-bold text-sm ${heatDelta > 0.5 ? 'text-orange-700' : heatDelta < -0.5 ? 'text-orange-400' : 'text-gray-400'}`}>
+                                {heatDelta > 0 ? '+' : ''}{heatDelta.toFixed(1)}
                               </span>
                             </td>
                             <td className="py-3 px-4 text-center">
-                              {isCritical && (
-                                <Badge className="bg-red-600 text-white rounded-none">
-                                  NEW CRITICAL
+                              {isCritical ? (
+                                <Badge className="bg-red-600 text-white rounded-none text-[10px]">
+                                  {t('statusNewCritical')}
                                 </Badge>
-                              )}
-                              {scenario.top_risk_score > 80 && baseline.top_risk_score > 80 && (
-                                <Badge variant="outline" className="border-red-600 text-red-600 rounded-none">
-                                  STAYS CRITICAL
+                              ) : combinedChange > 10 ? (
+                                <Badge className="bg-orange-500 text-white rounded-none text-[10px]">
+                                  {t('statusHighImpact')}
                                 </Badge>
+                              ) : combinedChange > 0.5 ? (
+                                <Badge variant="outline" className="border-orange-400 text-orange-600 rounded-none text-[10px]">
+                                  {t('statusIncreased')}
+                                </Badge>
+                              ) : combinedChange < -0.5 ? (
+                                <Badge variant="outline" className="border-green-400 text-green-600 rounded-none text-[10px]">
+                                  {t('statusReduced')}
+                                </Badge>
+                              ) : (
+                                <span className="text-[10px] text-gray-400 font-bold">{t('noChange')}</span>
                               )}
                             </td>
                           </tr>

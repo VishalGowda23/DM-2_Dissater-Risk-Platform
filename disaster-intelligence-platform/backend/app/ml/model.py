@@ -70,8 +70,15 @@ class MLRiskModel:
             logger.warning("XGBoost not available, using fallback")
             return False
 
-        flood_path = self.model_path.replace(".pkl", "_flood.pkl")
-        heat_path = self.model_path.replace(".pkl", "_heat.pkl")
+        model_dir = os.path.dirname(self.model_path)
+        flood_path = os.path.join(model_dir, "model_flood.pkl")
+        heat_path = os.path.join(model_dir, "model_heat.pkl")
+
+        # Also try the old naming convention
+        if not os.path.exists(flood_path):
+            flood_path = self.model_path.replace(".pkl", "_flood.pkl")
+        if not os.path.exists(heat_path):
+            heat_path = self.model_path.replace(".pkl", "_heat.pkl")
 
         try:
             if os.path.exists(flood_path):
@@ -136,17 +143,51 @@ class MLRiskModel:
         }
 
     def predict_heat(self, ward, weather_data: Optional[Dict] = None) -> Dict:
-        """Predict heat event probability"""
+        """Predict heat event probability with weather-based context adjustment.
+
+        The underlying XGBoost model does NOT include temperature as a feature,
+        so its raw output reflects *structural vulnerability* only.  We apply a
+        weather-aware attenuation factor so that:
+        - When temperatures are above baseline → use raw probability
+        - When temperatures are near/below baseline → dampen substantially
+        - When no weather data → use a moderate dampening (assume normal temps)
+        """
         features = self.extract_features(ward, weather_data)
 
         if self.heat_model is not None:
-            probability = float(self.heat_model.predict_proba(features)[0, 1])
+            raw_probability = float(self.heat_model.predict_proba(features)[0, 1])
             confidence = self._calculate_confidence(features)
             shap_values = self._get_shap_values(self.heat_model, features)
         else:
-            probability = self._fallback_heat_probability(features[0])
+            raw_probability = self._fallback_heat_probability(features[0])
             confidence = 0.5
             shap_values = self._fallback_shap(features[0], "heat")
+
+        # --- Weather-based attenuation ---
+        baseline_temp = getattr(ward, "baseline_avg_temp_c", None) or 28.0
+        attenuation = 0.25  # default: assume normal / non-extreme temps
+
+        if weather_data:
+            current = weather_data.get("current", {})
+            forecast = weather_data.get("forecast", {})
+            current_temp = current.get("temperature_c") or forecast.get("avg_temp_forecast_c")
+
+            if current_temp is not None:
+                anomaly = current_temp - baseline_temp
+                if anomaly >= 8:
+                    attenuation = 1.0      # extreme heatwave
+                elif anomaly >= 6:
+                    attenuation = 0.75     # strong heat event
+                elif anomaly >= 4:
+                    attenuation = 0.45     # warm afternoon — moderate
+                elif anomaly >= 2:
+                    attenuation = 0.25     # mildly above average — low
+                elif anomaly >= 0:
+                    attenuation = 0.12     # near baseline — negligible
+                else:
+                    attenuation = 0.05     # below baseline — minimal
+
+        probability = raw_probability * attenuation
 
         return {
             "probability": round(probability, 4),

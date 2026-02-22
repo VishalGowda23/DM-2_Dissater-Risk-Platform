@@ -1,5 +1,5 @@
 """
-Core configuration for Disaster Intelligence Platform
+Core configuration for PRAKALP
 Production-grade settings with environment variable loading
 """
 from pydantic_settings import BaseSettings
@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
     # Application
-    APP_NAME: str = "Disaster Intelligence Platform"
+    APP_NAME: str = "PRAKALP"
     APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "production"
@@ -113,9 +113,16 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW: int = 60
 
+    # Twilio (SMS / WhatsApp alerts)
+    TWILIO_ACCOUNT_SID: Optional[str] = None
+    TWILIO_AUTH_TOKEN: Optional[str] = None
+    TWILIO_SMS_FROM: Optional[str] = None
+    TWILIO_WHATSAPP_FROM: Optional[str] = None
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 # Global settings instance

@@ -1,5 +1,5 @@
 """
-Disaster Intelligence Platform - Production FastAPI Application
+PRAKALP - Production FastAPI Application
 Main entry point with lifespan management, middleware, and API mounts
 """
 from contextlib import asynccontextmanager
@@ -15,7 +15,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     stream=sys.stdout,
 )
-logger = logging.getLogger("disaster-intelligence")
+logger = logging.getLogger("prakalp")
 
 
 @asynccontextmanager
@@ -94,9 +94,9 @@ from app.db.config import settings
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Production-grade Multi-Hazard Disaster Intelligence Platform for Pune - "
-                "Dual-layer risk assessment (Composite + ML), PostGIS spatial analysis, "
-                "real-time weather integration, scenario simulation, resource optimization",
+    description="PRAKALP — Predictive Risk Assessment And Knowledge Analytics For Localized Preparedness. "
+                "Multi-hazard micro-level disaster intelligence for Pune with dual-layer risk assessment, "
+                "real-time weather integration, scenario simulation, and resource optimization.",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

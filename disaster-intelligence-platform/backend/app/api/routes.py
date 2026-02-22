@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import logging
+import re
 
 from app.db.database import get_db
 from app.db.config import settings
@@ -222,6 +223,7 @@ async def get_risk_scores(
             },
             "top_hazard": s.top_hazard or "none",
             "top_risk_score": round(s.final_combined_risk or 0, 2),
+            "risk_category": s.risk_category or "moderate",
         })
 
     return {
@@ -258,8 +260,25 @@ async def get_risk_summary(db: Session = Depends(get_db)):
     surge = [s for s in scores if s.surge_alert]
     critical_alerts = [s for s in scores if s.critical_alert]
 
+    # Calculate total population from ward data
+    wards = db.query(Ward).all()
+    total_population = sum(w.population or 0 for w in wards)
+
+    # Determine overall status
+    max_combined = max(combined_risks) if combined_risks else 0
+    if len(critical) > 0 or max_combined >= 80:
+        overall_status = "critical"
+    elif len(high) >= 10 or max_combined >= 65:
+        overall_status = "high"
+    elif max_combined >= 50:
+        overall_status = "elevated"
+    else:
+        overall_status = "normal"
+
     return {
         "total_wards": len(scores),
+        "total_population": total_population,
+        "overall_status": overall_status,
         "average_risks": {
             "flood": round(sum(flood_risks) / len(flood_risks), 2),
             "heat": round(sum(heat_risks) / len(heat_risks), 2),
@@ -282,10 +301,20 @@ async def get_risk_summary(db: Session = Depends(get_db)):
             "surge_wards": [s.ward_id for s in surge],
             "critical_wards": [s.ward_id for s in critical_alerts],
         },
-        "critical_wards": [
-            {"ward_id": s.ward_id, "risk": round(s.final_combined_risk or 0, 2), "hazard": s.top_hazard}
-            for s in sorted(scores, key=lambda x: x.final_combined_risk or 0, reverse=True)[:5]
-        ],
+        "critical_wards": {
+            "count": len(critical),
+            "wards": [
+                {"ward_id": s.ward_id, "hazard": s.top_hazard, "risk": round(s.final_combined_risk or 0, 2)}
+                for s in critical
+            ],
+        },
+        "high_risk_wards": {
+            "count": len(high),
+            "wards": [
+                {"ward_id": s.ward_id, "hazard": s.top_hazard, "risk": round(s.final_combined_risk or 0, 2)}
+                for s in high
+            ],
+        },
         "last_computed": max(s.timestamp for s in scores).isoformat() if scores else None,
     }
 
@@ -311,14 +340,127 @@ async def explain_risk(
     if not latest:
         raise HTTPException(status_code=404, detail=f"No risk score computed for ward {ward_id}")
 
+    # Compute hazard-specific fields for the frontend
+    risk_dict = latest.to_dict()
+    if hazard == "flood":
+        baseline_risk = latest.flood_baseline_risk or 0
+        event_risk = latest.flood_event_risk or 0
+        delta = latest.flood_risk_delta or 0
+        delta_pct = latest.flood_risk_delta_pct or 0
+    else:
+        baseline_risk = latest.heat_baseline_risk or 0
+        event_risk = latest.heat_event_risk or 0
+        delta = latest.heat_risk_delta or 0
+        delta_pct = latest.heat_risk_delta_pct or 0
+
+    # Determine surge level from delta_pct
+    if delta_pct >= settings.DELTA_CRITICAL_THRESHOLD:
+        surge_level = "critical"
+        surge_description = f"CRITICAL SURGE: Risk increased by {delta_pct:.0f}% above baseline"
+    elif delta_pct >= settings.DELTA_SURGE_THRESHOLD:
+        surge_level = "surge"
+        surge_description = f"RISK SURGE: Risk increased by {delta_pct:.0f}% above baseline"
+    elif delta_pct >= 10:
+        surge_level = "elevated"
+        surge_description = f"Elevated: Risk {delta_pct:.0f}% above baseline"
+    else:
+        surge_level = "normal"
+        surge_description = "Risk within normal range"
+
+    # Build hazard-specific top drivers from per-hazard SHAP values
+    raw_drivers = latest.top_drivers or []
+    top_drivers_event = []
+    top_drivers_baseline = []
+
+    # Features that are physically meaningful per hazard.
+    # The shared ML model was trained on all 11 features, so SHAP values for
+    # flood-centric features (rainfall) can dominate heat predictions due to
+    # spurious correlations — filter them out by relevance.
+    FLOOD_RELEVANT = {
+        "rainfall_intensity", "cumulative_rainfall_48h", "elevation_m",
+        "mean_slope", "drainage_index", "impervious_surface_pct",
+        "low_lying_index", "historical_frequency", "population_density",
+        "elderly_ratio",
+    }
+    HEAT_RELEVANT = {
+        "population_density", "elderly_ratio", "infrastructure_density",
+        "elevation_m", "mean_slope", "historical_frequency",
+        "impervious_surface_pct", "drainage_index",
+    }
+    relevant_features = FLOOD_RELEVANT if hazard == "flood" else HEAT_RELEVANT
+
+    hazard_shap = (latest.shap_values or {}).get(hazard) or {}
+    if hazard_shap:
+        # Filter to hazard-relevant features only, then sort by absolute SHAP impact
+        shap_items = [
+            (k, v) for k, v in hazard_shap.items()
+            if k in relevant_features
+        ]
+        shap_items.sort(key=lambda x: abs(x[1]), reverse=True)
+        top_shap = shap_items[:5]
+        total_impact = sum(abs(v) for _, v in top_shap) or 1
+        for factor_key, shap_val in top_shap:
+            contribution_pct = round((abs(shap_val) / total_impact) * 100, 1)
+            top_drivers_event.append({
+                "factor": factor_key,
+                "contribution": contribution_pct,
+                "value": "",
+                "direction": "increasing" if shap_val > 0 else "decreasing",
+            })
+    else:
+        # Fallback: use combined top_drivers normalized to percentages
+        total_impact = sum(
+            abs(drv.get("impact", drv.get("contribution", drv.get("weight", 0))))
+            for drv in raw_drivers if isinstance(drv, dict)
+        ) or 1
+        for drv in raw_drivers:
+            if isinstance(drv, dict):
+                raw_impact = abs(drv.get("impact", drv.get("contribution", drv.get("weight", 0))))
+                contribution_pct = round((raw_impact / total_impact) * 100, 1)
+                top_drivers_event.append({
+                    "factor": drv.get("factor", drv.get("name", "Unknown")),
+                    "contribution": contribution_pct,
+                    "value": drv.get("value", ""),
+                    "direction": drv.get("direction", "neutral"),
+                })
+
+    # Narrative explanation
+    ward_name = ward.name
+    narrative = (
+        f"{ward_name} is currently at {event_risk:.0f}% {hazard} risk "
+        f"(baseline: {baseline_risk:.0f}%). "
+    )
+    if delta_pct > 0:
+        narrative += f"Risk has increased by {delta_pct:.0f}% due to current weather conditions. "
+    elif delta_pct < 0:
+        narrative += f"Risk is {abs(delta_pct):.0f}% below baseline due to favorable conditions. "
+    else:
+        narrative += "Risk is at baseline levels. "
+
+    if top_drivers_event:
+        top_factor = top_drivers_event[0]["factor"]
+        narrative += f"The primary risk driver is {top_factor}."
+
     explanation = {
         "ward_id": ward_id,
         "ward_name": ward.name,
         "hazard": hazard,
-        "risk_score": latest.to_dict(),
-        "top_drivers": latest.top_drivers or [],
+        "baseline_risk": round(baseline_risk, 2),
+        "event_risk": round(event_risk, 2),
+        "delta": round(delta, 2),
+        "delta_pct": round(delta_pct, 2),
+        "surge_level": surge_level,
+        "surge_description": surge_description,
+        "narrative": narrative,
+        "top_drivers_event": top_drivers_event,
+        "top_drivers_baseline": top_drivers_baseline,
+        "risk_score": risk_dict,
+        "top_drivers": raw_drivers,
         "shap_values": (latest.shap_values or {}).get(hazard),
-        "recommendations": latest.recommendations or [],
+        "recommendations": [
+            re.sub(r'[^\x00-\x7F]+\s*', '', r).strip()
+            for r in (latest.recommendations or [])
+        ],
         "ward_characteristics": {
             "elevation_m": ward.elevation_m,
             "drainage_index": ward.drainage_index,
@@ -473,6 +615,31 @@ async def run_scenario(request: Dict[str, Any], db: Session = Depends(get_db)):
     if not wards:
         raise HTTPException(status_code=404, detail="No wards. Initialize data first.")
 
+    # Fetch latest weather data from risk scores for realistic scenario baselines
+    weather_data: Dict[str, Dict] = {}
+    for ward in wards:
+        latest = (
+            db.query(WardRiskScore)
+            .filter(WardRiskScore.ward_id == ward.ward_id)
+            .order_by(WardRiskScore.timestamp.desc())
+            .first()
+        )
+        if latest and latest.current_rainfall_mm is not None:
+            weather_data[ward.ward_id] = {
+                "current": {
+                    "rainfall_mm": latest.current_rainfall_mm or 0,
+                    "temperature_c": latest.current_temp_c,
+                    "humidity_pct": latest.humidity_pct or 70,
+                    "wind_speed_kmh": latest.wind_speed_kmh or 15,
+                },
+                "forecast": {
+                    "rainfall_48h_mm": latest.rainfall_forecast_48h_mm or 0,
+                    "rainfall_7d_mm": latest.rainfall_forecast_7d_mm or 0,
+                    "max_rainfall_intensity_mm_h": (latest.current_rainfall_mm or 0) * 1.5,
+                    "avg_temp_forecast_c": latest.current_temp_c,
+                },
+            }
+
     scenario_key = request.get("scenario_key")
     custom_params = None
 
@@ -489,8 +656,7 @@ async def run_scenario(request: Dict[str, Any], db: Session = Depends(get_db)):
                 request.get("rain_multiplier", 1.0)),
             temperature_increase=frontend_params.get("temp_anomaly_addition",
                 request.get("temperature_increase", 0.0)),
-            drainage_improvement=frontend_params.get("drainage_efficiency_multiplier",
-                request.get("drainage_improvement", 0.0)),
+            drainage_improvement=0.0,  # set below from drainage_efficiency_multiplier
             infrastructure_failure_factor=request.get("infrastructure_failure_factor", 0.0),
             population_growth_pct=frontend_params.get("population_growth_pct",
                 request.get("population_growth_pct", 0.0)),
@@ -507,13 +673,18 @@ async def run_scenario(request: Dict[str, Any], db: Session = Depends(get_db)):
                 custom_params.infrastructure_failure_factor, 1.0 - de_mult
             )
             custom_params.drainage_improvement = 0.0
+        # When de_mult == 1.0 (neutral): drainage_improvement stays 0.0
 
         scenario_key = None  # ensure we use custom_params
 
     try:
         raw_result = scenario_engine.run_scenario_comparison(
-            wards, scenario_key=scenario_key, custom_params=custom_params
+            wards, scenario_key=scenario_key, custom_params=custom_params,
+            weather_data=weather_data if weather_data else None,
         )
+
+        # Build ward lookup for population/centroid
+        ward_lookup = {w.ward_id: w for w in wards}
 
         # Transform response to match frontend ScenarioResult type
         ward_results = raw_result.get("ward_results", [])
@@ -536,12 +707,17 @@ async def run_scenario(request: Dict[str, Any], db: Session = Depends(get_db)):
             if scenario_top > 80 and baseline_top <= 80:
                 newly_critical += 1
 
+            # Look up real ward data for population/centroid
+            w = ward_lookup.get(wr["ward_id"])
+            w_pop = w.population if w else 0
+            w_centroid = {"lat": w.centroid_lat, "lon": w.centroid_lon} if w else {"lat": 0, "lon": 0}
+
             results.append({
                 "baseline": {
                     "ward_id": wr["ward_id"],
                     "ward_name": wr["ward_name"],
-                    "population": 0,
-                    "centroid": {"lat": 0, "lon": 0},
+                    "population": w_pop,
+                    "centroid": w_centroid,
                     "flood": {
                         "baseline": baseline_flood,
                         "event": baseline_flood,
@@ -558,8 +734,8 @@ async def run_scenario(request: Dict[str, Any], db: Session = Depends(get_db)):
                 "scenario": {
                     "ward_id": wr["ward_id"],
                     "ward_name": wr["ward_name"],
-                    "population": 0,
-                    "centroid": {"lat": 0, "lon": 0},
+                    "population": w_pop,
+                    "centroid": w_centroid,
                     "flood": {
                         "baseline": scenario_flood,
                         "event": scenario_flood,
@@ -639,6 +815,32 @@ async def optimize_resources(request: Dict[str, Any], db: Session = Depends(get_
     scenario_obj = request.get("scenario", {})
     use_delta = scenario_obj.get("use_delta", request.get("use_delta", True))
 
+    # --- Activation threshold check ---
+    # Do not deploy any resources if all wards are below the low-risk threshold
+    from app.db.config import settings as db_settings
+    max_risk = max((w.get("final_combined_risk", 0) or 0 for w in wards_data), default=0)
+    LOW_THRESHOLD = getattr(db_settings, "RISK_LOW_THRESHOLD", 30)
+    if max_risk < LOW_THRESHOLD:
+        fe_keys = list(request.get("resources", {}).keys()) if request.get("resources") else list(["pumps","buses","relief_camps","cooling_centers","medical_units"])
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "scenario": {"use_delta": use_delta},
+            "total_resources": {k: request.get("resources", {}).get(k, 0) for k in fe_keys},
+            "total_allocated": {k: 0 for k in fe_keys},
+            "resource_gap": {},
+            "resource_gap_summary": {"total_required": 0, "total_available": 0, "total_gap": 0, "overall_coverage_pct": 100},
+            "ward_allocations": [],
+            "explanations": {"rule_1": f"No resources deployed — all ward risk scores are below the activation threshold ({LOW_THRESHOLD}). Current maximum risk: {round(max_risk, 1)}."},
+            "summary": {
+                "total_wards": len(wards_data),
+                "critical_wards": 0,
+                "highest_need_ward": None,
+                "allocation_skipped": True,
+                "max_risk": round(max_risk, 1),
+                "activation_threshold": LOW_THRESHOLD,
+            },
+        }
+
     # Map frontend resource keys to backend resource config
     frontend_resources = request.get("resources", {})
     RESOURCE_KEY_MAP = {
@@ -700,6 +902,7 @@ async def optimize_resources(request: Dict[str, Any], db: Session = Depends(get_
             "ward_id": wd["ward_id"],
             "ward_name": wd["ward_name"],
             "population": wd["population"],
+            "combined_risk": round(wd.get("final_combined_risk", 0), 2),
             "risk": {
                 "flood": round(wd.get("flood_risk", 0), 2),
                 "heat": round(wd.get("heat_risk", 0), 2),
@@ -720,8 +923,8 @@ async def optimize_resources(request: Dict[str, Any], db: Session = Depends(get_
                     "proportion": round(wa["allocated"] / max(alloc_data["total_available"], 1), 4),
                     "is_critical": wa.get("risk_category") in ["critical", "high"],
                 }
-                # Update need_score from allocation
-                ward_map[wid]["need_score"] = max(ward_map[wid]["need_score"], wa["need_score"])
+                # Keep the original need_score from calculate_need_score()
+                # Don't override with per-resource adjusted scores
 
     # Sort by need_score descending
     ward_allocations = sorted(ward_map.values(), key=lambda w: w["need_score"], reverse=True)
@@ -737,11 +940,40 @@ async def optimize_resources(request: Dict[str, Any], db: Session = Depends(get_
 
     raw_summary = result.get("summary", {})
 
+    # Build resource requirements/gap data using frontend keys
+    raw_requirements = result.get("resource_requirements", {})
+    resource_gap = {}
+    total_system_required = 0
+    total_system_available = 0
+    for backend_key, req_data in raw_requirements.items():
+        fe_key = REVERSE_KEY_MAP.get(backend_key, backend_key)
+        resource_gap[fe_key] = {
+            "resource_name": req_data["resource_name"],
+            "unit": req_data["unit"],
+            "total_available": req_data["total_available"],
+            "total_required": req_data["total_required"],
+            "total_allocated": req_data["total_allocated"],
+            "total_gap": req_data["total_gap"],
+            "coverage_pct": req_data["coverage_pct"],
+            "ward_requirements": req_data["ward_requirements"],
+        }
+        total_system_required += req_data["total_required"]
+        total_system_available += req_data["total_available"]
+
     return {
         "timestamp": datetime.now().isoformat(),
         "scenario": {"use_delta": use_delta},
         "total_resources": total_resources,
         "total_allocated": total_allocated,
+        "resource_gap": resource_gap,
+        "resource_gap_summary": {
+            "total_required": total_system_required,
+            "total_available": total_system_available,
+            "total_gap": max(0, total_system_required - total_system_available),
+            "overall_coverage_pct": round(
+                min(100, (total_system_available / max(total_system_required, 1)) * 100), 1
+            ),
+        },
         "ward_allocations": ward_allocations,
         "explanations": explanations_dict,
         "summary": {
@@ -1019,6 +1251,8 @@ async def get_alerts(db: Session = Depends(get_db)):
                 "top_hazard": scores.top_hazard or "flood",
                 "top_risk_score": scores.final_combined_risk or 0,
                 "final_combined_risk": scores.final_combined_risk or 0,
+                "centroid_lat": getattr(ward, 'centroid_lat', None),
+                "centroid_lon": getattr(ward, 'centroid_lon', None),
             })
 
     return alert_service.generate_alerts(risk_data)
@@ -1044,9 +1278,86 @@ async def generate_alerts(request: Dict[str, Any], db: Session = Depends(get_db)
                 "top_hazard": scores.top_hazard or "flood",
                 "top_risk_score": scores.final_combined_risk or 0,
                 "final_combined_risk": scores.final_combined_risk or 0,
+                "centroid_lat": getattr(ward, 'centroid_lat', None),
+                "centroid_lon": getattr(ward, 'centroid_lon', None),
             })
 
     return alert_service.generate_alerts(risk_data)
+
+
+@alert_router.post("/alerts/send")
+async def send_alert(request: Dict[str, Any]):
+    """
+    Send a real SMS or WhatsApp message via Twilio.
+
+    Body:
+        phone        : str   — destination number (E.164 or bare 10-digit Indian)
+        message      : str   — text to send (title + body recommended)
+        channel      : str   — "sms" | "whatsapp"  (default "sms")
+        title        : str   — optional; prepended to message if provided
+        ward_lat     : float — optional; ward centroid latitude  (for map)
+        ward_lon     : float — optional; ward centroid longitude (for map)
+        shelter_lat  : float — optional; shelter latitude  (for map)
+        shelter_lon  : float — optional; shelter longitude (for map)
+        ward_name    : str   — optional; ward name   (map label)
+        shelter_name : str   — optional; shelter name (map label)
+        route_coords : list  — optional; [[lat,lon], …] safe route waypoints
+    """
+    from app.services.twilio_service import twilio_service
+
+    phone = request.get("phone", "").strip()
+    message = request.get("message", "").strip()
+    channel = request.get("channel", "sms").lower()
+    title = request.get("title", "").strip()
+
+    if not phone:
+        return {"success": False, "error": "phone number is required"}
+    if not message:
+        return {"success": False, "error": "message is required"}
+
+    full_message = f"{title}\n\n{message}" if title else message
+
+    if not twilio_service.is_ready:
+        return {
+            "success": False,
+            "error": "Twilio is not configured. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_SMS_FROM to your .env file.",
+            "demo_message": full_message,
+        }
+
+    # Extract optional map coordinates
+    ward_lat = request.get("ward_lat")
+    ward_lon = request.get("ward_lon")
+    shelter_lat = request.get("shelter_lat")
+    shelter_lon = request.get("shelter_lon")
+    ward_name = request.get("ward_name", "")
+    shelter_name = request.get("shelter_name", "")
+    route_coords = request.get("route_coords")  # [[lat,lon], ...]
+
+    result = twilio_service.send_alert(
+        phone, full_message, channel,
+        ward_lat=ward_lat, ward_lon=ward_lon,
+        shelter_lat=shelter_lat, shelter_lon=shelter_lon,
+        ward_name=ward_name, shelter_name=shelter_name,
+        route_coords=route_coords,
+    )
+    return {
+        "success": result.success,
+        "sid": result.sid,
+        "to": result.to,
+        "channel": result.channel,
+        "status": result.status,
+        "error": result.error,
+    }
+
+
+@alert_router.get("/alerts/twilio/status")
+async def twilio_status():
+    """Check whether Twilio is configured and ready."""
+    from app.services.twilio_service import twilio_service
+    return {
+        "configured": twilio_service.is_ready,
+        "message": "Twilio ready ✓" if twilio_service.is_ready else "Twilio not configured — add credentials to .env",
+    }
 
 
 # ─── Feature: Evacuation Routing ─────────────────────────────────────────────

@@ -11,12 +11,17 @@ from datetime import datetime
 import json
 
 # GeoAlchemy2 is optional — SQLite works without it
+# Even if geoalchemy2 is installed, disable geometry types for SQLite
 try:
     from geoalchemy2 import Geometry
-    HAS_GEO = True
+    _has_geoalchemy2 = True
 except ImportError:
-    HAS_GEO = False
+    _has_geoalchemy2 = False
     Geometry = None
+
+# Only use GeoAlchemy2 geometry types with actual PostgreSQL/PostGIS
+from app.db.config import settings as _settings
+HAS_GEO = _has_geoalchemy2 and "sqlite" not in _settings.DATABASE_URL
 
 from app.db.database import Base
 

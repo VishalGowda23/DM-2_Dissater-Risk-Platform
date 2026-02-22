@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Settings, Truck, Home, Thermometer, Droplets, Activity, CheckCircle } from 'lucide-react';
+import { Settings, Truck, Home, Thermometer, Droplets, Activity, CheckCircle, AlertTriangle, TrendingUp } from 'lucide-react';
+import { useLang, wardName, resourceKey } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +16,7 @@ interface ResourceOptimizerProps {
 }
 
 export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptimizerProps) {
+  const { t, lang } = useLang();
   const [resources, setResources] = useState({
     pumps: 25,
     buses: 15,
@@ -42,12 +44,12 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
       if (res.ok) {
         const data = await res.json();
         setResult(data);
-        toast.success('Optimization complete!');
+        toast.success(t('optimizeSuccess'));
       } else {
-        toast.error('Optimization failed');
+        toast.error(t('optimizeFailed'));
       }
     } catch (error) {
-      toast.error('Error running optimization');
+      toast.error(t('optimizeError'));
     } finally {
       setLoading(false);
     }
@@ -82,16 +84,16 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
         <CardHeader>
           <CardTitle className="font-black uppercase flex items-center gap-2">
             <Settings className="w-5 h-5" />
-            Resource Configuration
+            {t('resourceConfig')}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
             {Object.entries(resources).map(([key, value]) => (
               <div key={key} className="space-y-2">
                 <Label className="font-bold uppercase text-xs flex items-center gap-1">
                   {getResourceIcon(key)}
-                  {key.replace('_', ' ')}
+                  {t(resourceKey(key))}
                 </Label>
                 <Input
                   type="number"
@@ -110,9 +112,14 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
                 checked={useDelta}
                 onCheckedChange={setUseDelta}
               />
-              <Label className="font-medium">
-                Use Risk Delta for allocation (prioritize surging wards)
-              </Label>
+              <div>
+                <Label className="font-medium block">
+                  {t('prioritizeSurging')}
+                </Label>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {useDelta ? t('prioritizeSurgingOn') : t('prioritizeSurgingOff')}
+                </p>
+              </div>
             </div>
 
             <Button
@@ -125,7 +132,7 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
               ) : (
                 <CheckCircle className="w-4 h-4 mr-2" />
               )}
-              Run Optimization
+              {t('runOptimization')}
             </Button>
           </div>
         </CardContent>
@@ -134,34 +141,52 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
       {/* Results */}
       {result && (
         <div className="space-y-6">
+          {/* Allocation skipped — all wards low risk */}
+          {result.summary.allocation_skipped ? (
+            <Card className="border-2 border-green-600 rounded-none">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
+                  <div className="text-lg font-black uppercase text-green-700">{t('noDeployRequired')}</div>
+                </div>
+                <p className="text-sm text-gray-700">
+                  {t('noDeployDesc')} ({result.summary.activation_threshold}).
+                  {t('highestRecordedRisk')} <span className="font-bold">{result.summary.max_risk}</span>.
+                  {t('noDeployUntilDeter')}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+          <>
           {/* Summary */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="border-2 border-black rounded-none">
               <CardContent className="pt-6">
-                <div className="text-sm text-gray-500 uppercase font-bold">Total Wards</div>
+                <div className="text-sm text-gray-500 uppercase font-bold">{t('totalWards')}</div>
                 <div className="text-3xl font-black">{result.summary.total_wards}</div>
               </CardContent>
             </Card>
             <Card className="border-2 border-black rounded-none">
               <CardContent className="pt-6">
-                <div className="text-sm text-gray-500 uppercase font-bold">Critical Wards</div>
+                <div className="text-sm text-gray-500 uppercase font-bold">{t('criticalWards')}</div>
                 <div className="text-3xl font-black text-red-600">{result.summary.critical_wards}</div>
               </CardContent>
             </Card>
             <Card className="border-2 border-black rounded-none">
               <CardContent className="pt-6">
-                <div className="text-sm text-gray-500 uppercase font-bold">Highest Need</div>
+                <div className="text-sm text-gray-500 uppercase font-bold">{t('highestNeed')}</div>
                 <div className="text-lg font-black truncate">
-                  {result.ward_allocations.find(w => w.ward_id === result.summary.highest_need_ward)?.ward_name}
+                  {(() => { const w = result.ward_allocations.find(w => w.ward_id === result.summary.highest_need_ward); return w ? wardName(w, lang) : ''; })()}
                 </div>
               </CardContent>
             </Card>
             <Card className="border-2 border-black rounded-none">
               <CardContent className="pt-6">
-                <div className="text-sm text-gray-500 uppercase font-bold">Resources Allocated</div>
+                <div className="text-sm text-gray-500 uppercase font-bold">{t('deployed')}</div>
                 <div className="text-3xl font-black">
                   {Object.values(result.total_allocated).reduce((a, b) => a + b, 0)}
                 </div>
+                <div className="text-xs text-gray-400 mt-1">{t('unitsAllocated')}</div>
               </CardContent>
             </Card>
           </div>
@@ -169,21 +194,21 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
           {/* Resource Allocation Summary */}
           <Card className="border-2 border-black rounded-none">
             <CardHeader>
-              <CardTitle className="font-black uppercase">Allocation Summary by Resource Type</CardTitle>
+              <CardTitle className="font-black uppercase">{t('allocationSummary')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 {Object.entries(result.total_resources).map(([type, total]) => (
                   <div key={type} className="border-2 border-gray-200 p-4">
                     <div className="flex items-center gap-2 mb-2">
                       {getResourceIcon(type)}
-                      <span className="font-bold uppercase text-sm">{type.replace('_', ' ')}</span>
+                      <span className="font-bold uppercase text-sm">{t(resourceKey(type))}</span>
                     </div>
                     <div className="text-2xl font-black">
                       {result.total_allocated[type] || 0} / {total}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {((result.total_allocated[type] || 0) / total * 100).toFixed(0)}% allocated
+                      {((result.total_allocated[type] || 0) / total * 100).toFixed(0)}% {t('allocated')}
                     </div>
                   </div>
                 ))}
@@ -191,33 +216,143 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
             </CardContent>
           </Card>
 
+          {/* Resource Gap / Deficit Analysis */}
+          {result.resource_gap && result.resource_gap_summary && (
+            <Card className="border-2 border-black rounded-none">
+              <CardHeader>
+                <CardTitle className="font-black uppercase flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  {t('resourceGapAnalysis')}
+                </CardTitle>
+                <div className="flex items-center gap-2 sm:gap-4 mt-2 flex-wrap">
+                  <div className="text-sm text-gray-600">
+                    {t('overallCoverage')}:{' '}
+                    <span className={`font-black ${
+                      result.resource_gap_summary.overall_coverage_pct >= 80 ? 'text-green-600' :
+                      result.resource_gap_summary.overall_coverage_pct >= 50 ? 'text-amber-600' :
+                      'text-red-600'
+                    }`}>
+                      {result.resource_gap_summary.overall_coverage_pct}%
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {t('totalNeeded')}: <span className="font-black">{result.resource_gap_summary.total_required}</span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {t('totalAvailable')}: <span className="font-black">{result.resource_gap_summary.total_available}</span>
+                  </div>
+                  {result.resource_gap_summary.total_gap > 0 && (
+                    <Badge variant="outline" className="border-red-600 text-red-600 rounded-none font-bold">
+                      {t('deficit')}: {result.resource_gap_summary.total_gap} units
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-4">
+                  {Object.entries(result.resource_gap).map(([type, gapData]) => {
+                    const hasGap = gapData.total_gap > 0;
+                    const topDeficitWards = gapData.ward_requirements
+                      .filter(w => w.gap > 0)
+                      .slice(0, 5);
+
+                    return (
+                      <div key={type} className={`border-2 p-4 ${hasGap ? 'border-red-300 bg-red-50' : 'border-green-300 bg-green-50'}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            {getResourceIcon(type)}
+                            <span className="font-bold uppercase text-sm">{t(resourceKey(type))}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-sm">
+                              <span className="text-gray-500">{t('available')}:</span>{' '}
+                              <span className="font-black">{gapData.total_available}</span>
+                            </div>
+                            <div className="text-sm">
+                              <span className="text-gray-500">{t('required')}:</span>{' '}
+                              <span className="font-black">{gapData.total_required}</span>
+                            </div>
+                            {hasGap ? (
+                              <Badge variant="outline" className="border-red-600 text-red-600 rounded-none font-bold text-xs">
+                                <TrendingUp className="w-3 h-3 mr-1" />
+                                +{gapData.total_gap} {gapData.unit} {t('unitsNeeded')}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="border-green-600 text-green-600 rounded-none font-bold text-xs">
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                {t('sufficient')}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Coverage bar */}
+                        <div className="w-full bg-gray-200 h-3 mb-3">
+                          <div
+                            className={`h-3 ${
+                              gapData.coverage_pct >= 80 ? 'bg-green-500' :
+                              gapData.coverage_pct >= 50 ? 'bg-amber-500' :
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(100, gapData.coverage_pct)}%` }}
+                          />
+                        </div>
+                        <div className="text-xs text-gray-500 mb-2">
+                          {gapData.coverage_pct}% {t('coverageLabel')}
+                        </div>
+
+                        {/* Top deficit wards */}
+                        {topDeficitWards.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-xs font-bold uppercase text-gray-500 mb-1">
+                              {t('topWardsNeeding')} {t(resourceKey(type))}:
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {topDeficitWards.map(w => (
+                                <span key={w.ward_id} className="inline-flex items-center gap-1 text-xs bg-white border border-gray-300 px-2 py-1 font-mono">
+                                  <span className="font-bold">{wardName(w as unknown as { ward_name: string; ward_name_marathi?: string }, lang) || w.ward_id}</span>
+                                  <span className="text-red-600 font-bold">+{w.gap}</span>
+                                  <span className="text-gray-400">({w.allocated}/{w.required})</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Ward Allocations Table */}
           <Card className="border-2 border-black rounded-none">
             <CardHeader>
-              <CardTitle className="font-black uppercase">Ward-wise Allocations</CardTitle>
+              <CardTitle className="font-black uppercase">{t('wardwiseAllocations')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b-2 border-black bg-gray-100">
-                      <th className="text-left py-3 px-4 font-bold">Rank</th>
-                      <th className="text-left py-3 px-4 font-bold">Ward</th>
-                      <th className="text-left py-3 px-4 font-bold">Need Score</th>
+                      <th className="text-left py-3 px-4 font-bold">{t('rank')}</th>
+                      <th className="text-left py-3 px-4 font-bold">{t('ward')}</th>
+                      <th className="text-left py-3 px-4 font-bold">{t('needScore')}</th>
                       <th className="text-center py-3 px-4 font-bold">
-                        <Droplets className="w-4 h-4 inline text-blue-500" /> Pumps
+                        <Droplets className="w-4 h-4 inline text-blue-500" /> {t('resPumps')}
                       </th>
                       <th className="text-center py-3 px-4 font-bold">
-                        <Truck className="w-4 h-4 inline text-green-500" /> Buses
+                        <Truck className="w-4 h-4 inline text-green-500" /> {t('resBuses')}
                       </th>
                       <th className="text-center py-3 px-4 font-bold">
-                        <Home className="w-4 h-4 inline text-purple-500" /> Camps
+                        <Home className="w-4 h-4 inline text-purple-500" /> {t('resCamps')}
                       </th>
                       <th className="text-center py-3 px-4 font-bold">
-                        <Thermometer className="w-4 h-4 inline text-orange-500" /> Cooling
+                        <Thermometer className="w-4 h-4 inline text-orange-500" /> {t('resCooling')}
                       </th>
                       <th className="text-center py-3 px-4 font-bold">
-                        <Activity className="w-4 h-4 inline text-red-500" /> Medical
+                        <Activity className="w-4 h-4 inline text-red-500" /> {t('resMedical')}
                       </th>
                     </tr>
                   </thead>
@@ -230,8 +365,8 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="font-medium">{ward.ward_name}</div>
-                          <div className="text-xs text-gray-500">Pop: {ward.population?.toLocaleString()}</div>
+                          <div className="font-medium">{wardName(ward, lang)}</div>
+                          <div className="text-xs text-gray-500">{t('popLabel')} {ward.population?.toLocaleString()}</div>
                         </td>
                         <td className="py-3 px-4">
                           <div className="font-mono font-bold">{ward.need_score?.toFixed(1)}</div>
@@ -288,7 +423,7 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
           {Object.keys(result.explanations).length > 0 && (
             <Card className="border-2 border-black rounded-none bg-yellow-50">
               <CardHeader>
-                <CardTitle className="font-black uppercase">Allocation Rationale</CardTitle>
+                <CardTitle className="font-black uppercase">{t('allocationRationale')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -301,6 +436,8 @@ export default function ResourceOptimizer({ riskData: _riskData }: ResourceOptim
                 </div>
               </CardContent>
             </Card>
+          )}
+          </>
           )}
         </div>
       )}

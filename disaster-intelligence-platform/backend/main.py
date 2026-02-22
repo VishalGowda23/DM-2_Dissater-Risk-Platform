@@ -1,5 +1,5 @@
 """
-Disaster Intelligence Platform - Main FastAPI Application
+PRAKALP - Main FastAPI Application
 """
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,7 +45,7 @@ from ingestion.weather_api import WeatherAPIClient, WeatherIngestionService
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    logger.info("Starting up Disaster Intelligence Platform...")
+    logger.info("Starting up PRAKALP...")
     
     # Initialize database
     init_db()
@@ -60,12 +60,12 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    logger.info("Shutting down Disaster Intelligence Platform...")
+    logger.info("Shutting down PRAKALP...")
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Multi-Hazard Micro-Level Disaster Intelligence Platform for Pune",
+    description="PRAKALP — Predictive Risk Assessment And Knowledge Analytics For Localized Preparedness",
     lifespan=lifespan
 )
 

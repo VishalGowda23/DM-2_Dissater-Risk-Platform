@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Pune Disaster Intelligence Platform - Quick Start Script
+# PRAKALP - Quick Start Script
 
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🚀 Starting Pune Disaster Intelligence Platform...${NC}"
+echo -e "${BLUE}🚀 Starting PRAKALP — Pune Disaster Intelligence Platform...${NC}"
 
 # 1. Start Backend
 echo -e "${GREEN}📡 Launching Backend Server...${NC}"

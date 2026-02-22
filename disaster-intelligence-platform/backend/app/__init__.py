@@ -1,1 +1,1 @@
-# Disaster Intelligence Platform - Production Backend
+# PRAKALP - Production Backend

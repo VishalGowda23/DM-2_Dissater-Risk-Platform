@@ -245,29 +245,29 @@ class FinalRiskCalculator:
         recs = []
 
         if category == "critical":
-            recs.append("🚨 Activate emergency response protocols immediately")
-            recs.append("📢 Issue public warning for all residents")
+            recs.append("Activate emergency response protocols immediately")
+            recs.append("Issue public warning for all residents")
 
         if flood_risk >= 60:
-            recs.append("🚰 Deploy water pumps to low-lying areas")
+            recs.append("Deploy water pumps to low-lying areas")
             if ward.drainage_index and ward.drainage_index < 0.4:
-                recs.append("🔧 Clear blocked drainage channels immediately")
-            recs.append("🚌 Prepare evacuation buses for flood-prone zones")
+                recs.append("Clear blocked drainage channels immediately")
+            recs.append("Prepare evacuation buses for flood-prone zones")
 
         if heat_risk >= 60:
-            recs.append("❄️ Activate cooling centers in the ward")
+            recs.append("Activate cooling centers in the ward")
             if ward.elderly_ratio and ward.elderly_ratio > 0.12:
-                recs.append("👴 Deploy health workers for elderly welfare checks")
-            recs.append("💧 Ensure water distribution points are operational")
+                recs.append("Deploy health workers for elderly welfare checks")
+            recs.append("Ensure water distribution points are operational")
 
         if category in ["high", "critical"]:
-            recs.append("🏥 Alert hospitals for potential casualty surge")
-            recs.append("📡 Increase monitoring frequency to every 10 minutes")
+            recs.append("Alert hospitals for potential casualty surge")
+            recs.append("Increase monitoring frequency to every 10 minutes")
         elif category == "moderate":
-            recs.append("📊 Continue monitoring, assess again in 30 minutes")
+            recs.append("Continue monitoring, assess again in 30 minutes")
 
         if not recs:
-            recs.append("✅ Risk levels within normal range. Maintain standard monitoring.")
+            recs.append("Risk levels within normal range. Maintain standard monitoring.")
 
         return recs
 

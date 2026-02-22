@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Target, AlertCircle, Clock, CheckCircle, ArrowRight, Zap, ShieldCheck, Eye } from 'lucide-react';
 import { API_BASE_URL, type ActionItem } from '@/lib/types';
+import { useLang, wardName, categoryKey, resourceKey } from '@/lib/i18n';
 
 interface Props {
     riskData: unknown[];
@@ -18,6 +19,7 @@ interface KPIs {
 }
 
 export default function DecisionSupport(_props: Props) {
+    const { t, lang } = useLang();
     const [actions, setActions] = useState<ActionItem[]>([]);
     const [kpis, setKpis] = useState<KPIs | null>(null);
     const [situationLevel, setSituationLevel] = useState('GREEN');
@@ -104,48 +106,48 @@ export default function DecisionSupport(_props: Props) {
     return (
         <div className="space-y-4">
             {/* Situation Level Header */}
-            <div className={`border-2 border-black p-4 flex items-center justify-between ${getSituationStyle(situationLevel)}`}>
-                <div className="flex items-center gap-4">
-                    <div className="text-4xl font-black">🎯</div>
+            <div className={`border-2 border-black p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 ${getSituationStyle(situationLevel)}`}>
+                <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="text-3xl sm:text-4xl font-black">🎯</div>
                     <div>
-                        <h2 className="text-2xl font-black tracking-tight">COMMAND CENTER</h2>
-                        <p className="text-sm opacity-80">Decision Support System — Pune Municipal Corporation</p>
+                        <h2 className="text-xl sm:text-2xl font-black tracking-tight">{t('commandCenter')}</h2>
+                        <p className="text-xs sm:text-sm opacity-80">{t('decisionSupportSubtitle')}</p>
                     </div>
                 </div>
                 <div className="text-right">
-                    <div className="text-xs font-bold uppercase opacity-70">Situation Level</div>
+                    <div className="text-xs font-bold uppercase opacity-70">{t('situationLevel')}</div>
                     <div className="text-3xl font-black">{situationLevel}</div>
                 </div>
             </div>
 
             {/* KPI Strip */}
             {kpis && (
-                <div className="grid grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                     <div className="bg-red-50 border-2 border-red-500 p-3 text-center">
-                        <div className="text-xs font-bold uppercase text-red-500">Critical Pending</div>
+                        <div className="text-xs font-bold uppercase text-red-500">{t('criticalPending')}</div>
                         <div className="text-3xl font-black text-red-600">{kpis.critical_actions_pending}</div>
                     </div>
                     <div className="bg-white border-2 border-black p-3 text-center">
-                        <div className="text-xs font-bold uppercase text-gray-500">Total Actions</div>
+                        <div className="text-xs font-bold uppercase text-gray-500">{t('totalActions')}</div>
                         <div className="text-3xl font-black">{kpis.total_actions}</div>
                     </div>
                     <div className="bg-white border-2 border-orange-500 p-3 text-center">
-                        <div className="text-xs font-bold uppercase text-orange-500">Critical Wards</div>
+                        <div className="text-xs font-bold uppercase text-orange-500">{t('criticalWards')}</div>
                         <div className="text-3xl font-black text-orange-600">{kpis.critical_wards}</div>
                     </div>
                     <div className="bg-white border-2 border-purple-500 p-3 text-center">
-                        <div className="text-xs font-bold uppercase text-purple-500">Population at Risk</div>
+                        <div className="text-xs font-bold uppercase text-purple-500">{t('populationAtRisk')}</div>
                         <div className="text-xl font-black text-purple-600">{kpis.population_at_risk?.toLocaleString()}</div>
                     </div>
                     <div className="bg-green-50 border-2 border-green-500 p-3 text-center">
-                        <div className="text-xs font-bold uppercase text-green-500">Deployed</div>
+                        <div className="text-xs font-bold uppercase text-green-500">{t('deployed')}</div>
                         <div className="text-3xl font-black text-green-600">{acknowledgedIds.size}</div>
                     </div>
                     <div className={`p-3 text-center border-2 ${kpis.response_readiness === 'HIGH' ? 'bg-green-50 border-green-500' :
                         kpis.response_readiness === 'MODERATE' ? 'bg-yellow-50 border-yellow-500' :
                             'bg-red-50 border-red-500'
                         }`}>
-                        <div className="text-xs font-bold uppercase">Readiness</div>
+                        <div className="text-xs font-bold uppercase">{t('readiness')}</div>
                         <div className="text-xl font-black">{kpis.response_readiness}</div>
                     </div>
                 </div>
@@ -154,11 +156,11 @@ export default function DecisionSupport(_props: Props) {
             {/* Filter Tabs */}
             <div className="flex gap-2">
                 {[
-                    { key: 'all', label: 'All', count: actions.length },
-                    { key: 'immediate', label: '🔴 Immediate', count: stats.immediate },
-                    { key: 'next_6h', label: '🟠 Next 6h', count: stats.next_6h },
-                    { key: 'next_24h', label: '🟡 Next 24h', count: stats.next_24h },
-                    { key: 'advisory', label: '🔵 Advisory', count: stats.advisory },
+                    { key: 'all', label: t('allFilter'), count: actions.length },
+                    { key: 'immediate', label: `🔴 ${t('immediateFilter')}`, count: stats.immediate },
+                    { key: 'next_6h', label: `🟠 ${t('next6hFilter')}`, count: stats.next_6h },
+                    { key: 'next_24h', label: `🟡 ${t('next24hFilter')}`, count: stats.next_24h },
+                    { key: 'advisory', label: `🔵 ${t('advisoryFilter')}`, count: stats.advisory },
                 ].map(f => (
                     <button
                         key={f.key}
@@ -173,7 +175,7 @@ export default function DecisionSupport(_props: Props) {
                     onClick={fetchPlan}
                     className="ml-auto bg-black text-white px-4 py-1 text-sm font-bold"
                 >
-                    {loading ? 'Loading...' : 'Refresh Plan'}
+                    {loading ? t('loadingLabel') : t('refreshPlan')}
                 </button>
             </div>
 
@@ -195,21 +197,22 @@ export default function DecisionSupport(_props: Props) {
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className={`text-xs px-2 py-0.5 font-bold ${style.badge}`}>
-                                                    {action.priority === 'next_6h' ? 'NEXT 6H' :
-                                                        action.priority === 'next_24h' ? 'NEXT 24H' :
-                                                            action.priority.toUpperCase()}
+                                                    {action.priority === 'next_6h' ? t('next6hBadge') :
+                                                        action.priority === 'next_24h' ? t('next24hBadge') :
+                                                            action.priority === 'immediate' ? t('immediateFilter').toUpperCase() :
+                                                                t('advisoryFilter').toUpperCase()}
                                                 </span>
                                                 <span className="text-xs bg-gray-200 px-2 py-0.5 font-bold">
-                                                    {getCategoryIcon(action.category)} {action.category.toUpperCase()}
+                                                    {getCategoryIcon(action.category)} {t(categoryKey(action.category))}
                                                 </span>
-                                                <span className="text-xs text-gray-500">{action.ward_name}</span>
+                                                <span className="text-xs text-gray-500">{wardName(action, lang)}</span>
                                             </div>
                                             <h4 className="font-black text-sm">{action.title}</h4>
                                             <p className="text-sm text-gray-600 mt-1">{action.description}</p>
 
                                             {/* Justification */}
                                             <div className="mt-2 bg-white bg-opacity-50 p-2 text-xs text-gray-600">
-                                                <span className="font-bold">Why: </span>{action.justification}
+                                                <span className="font-bold">{t('why')} </span>{action.justification}
                                             </div>
 
                                             {/* Resources Needed */}
@@ -217,7 +220,7 @@ export default function DecisionSupport(_props: Props) {
                                                 <div className="mt-2 flex flex-wrap gap-2">
                                                     {action.resources_needed.map((r, i) => (
                                                         <span key={i} className="bg-white border border-gray-300 text-xs px-2 py-1 font-bold">
-                                                            {r.count}× {r.type.replace(/_/g, ' ')}
+                                                            {r.count}× {t(resourceKey(r.type))}
                                                         </span>
                                                     ))}
                                                 </div>
@@ -226,13 +229,13 @@ export default function DecisionSupport(_props: Props) {
                                             {/* Impact */}
                                             <div className="mt-2 text-xs text-gray-500">
                                                 <AlertCircle className="w-3 h-3 inline mr-1" />
-                                                <span className="font-bold">Impact: </span>{action.estimated_impact}
+                                                <span className="font-bold">{t('impact')} </span>{action.estimated_impact}
                                             </div>
 
                                             {/* Assignment */}
                                             <div className="mt-1 text-xs text-gray-400">
                                                 <ShieldCheck className="w-3 h-3 inline mr-1" />
-                                                Assigned: {action.assigned_to}
+                                                {t('assignedLabel')} {action.assigned_to}
                                             </div>
                                         </div>
                                     </div>
@@ -244,15 +247,15 @@ export default function DecisionSupport(_props: Props) {
                                                 onClick={() => acknowledge(action.action_id)}
                                                 className="bg-black text-white px-3 py-2 text-xs font-bold flex items-center gap-1 hover:bg-gray-800"
                                             >
-                                                <CheckCircle className="w-3 h-3" /> Acknowledge
+                                                <CheckCircle className="w-3 h-3" /> {t('acknowledgeBtn')}
                                             </button>
                                         ) : (
                                             <div className="flex flex-col gap-1">
                                                 <span className="bg-green-100 text-green-700 px-3 py-2 text-xs font-bold flex items-center gap-1">
-                                                    <CheckCircle className="w-3 h-3" /> Acknowledged
+                                                    <CheckCircle className="w-3 h-3" /> {t('acknowledgedLabel')}
                                                 </span>
                                                 <button className="bg-blue-600 text-white px-3 py-1 text-xs font-bold flex items-center gap-1">
-                                                    <ArrowRight className="w-3 h-3" /> Deploy
+                                                    <ArrowRight className="w-3 h-3" /> {t('deployBtn')}
                                                 </button>
                                             </div>
                                         )}
@@ -266,8 +269,8 @@ export default function DecisionSupport(_props: Props) {
                 {filtered.length === 0 && (
                     <div className="bg-white border-2 border-green-500 p-8 text-center text-green-600">
                         <CheckCircle className="w-12 h-12 mx-auto mb-3" />
-                        <p className="font-black text-lg">All Clear</p>
-                        <p className="text-sm text-gray-500">No actions required at current risk levels</p>
+                        <p className="font-black text-lg">{t('allClear')}</p>
+                        <p className="text-sm text-gray-500">{t('noActionsRequired')}</p>
                     </div>
                 )}
             </div>

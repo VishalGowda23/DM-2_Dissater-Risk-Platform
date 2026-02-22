@@ -14,7 +14,7 @@ export interface Ward {
   population: number;
   population_density?: number;
   elderly_ratio?: number;
-  area_sqkm?: number;
+  area_sq_km?: number;
   elevation_m?: number;
   drainage_index?: number;
   impervious_surface_pct?: number;
@@ -35,6 +35,7 @@ export interface HazardRisk {
 export interface RiskData {
   ward_id: string;
   ward_name: string;
+  ward_name_marathi?: string;
   population: number;
   centroid: {
     lat: number;
@@ -57,6 +58,7 @@ export interface ResourceAllocation {
 export interface WardAllocation {
   ward_id: string;
   ward_name: string;
+  ward_name_marathi?: string;
   population: number;
   risk: {
     flood: number;
@@ -67,6 +69,30 @@ export interface WardAllocation {
   resources: {
     [key: string]: ResourceAllocation;
   };
+}
+
+export interface ResourceGapDetail {
+  resource_name: string;
+  unit: string;
+  total_available: number;
+  total_required: number;
+  total_allocated: number;
+  total_gap: number;
+  coverage_pct: number;
+  ward_requirements: {
+    ward_id: string;
+    ward_name?: string;
+    required: number;
+    allocated: number;
+    gap: number;
+  }[];
+}
+
+export interface ResourceGapSummary {
+  total_required: number;
+  total_available: number;
+  total_gap: number;
+  overall_coverage_pct: number;
 }
 
 export interface OptimizationResult {
@@ -80,6 +106,10 @@ export interface OptimizationResult {
   total_allocated: {
     [key: string]: number;
   };
+  resource_gap?: {
+    [key: string]: ResourceGapDetail;
+  };
+  resource_gap_summary?: ResourceGapSummary;
   ward_allocations: WardAllocation[];
   explanations: {
     [key: string]: string;
@@ -142,6 +172,12 @@ export interface RiskExplanation {
   top_drivers_baseline: RiskFactor[];
   narrative: string;
   recommendations: string[];
+  risk_score?: Record<string, unknown>;
+  top_drivers?: unknown[];
+  shap_values?: Record<string, number>;
+  ward_characteristics?: Record<string, number | null>;
+  confidence?: number;
+  uncertainty?: number;
 }
 
 // Summary Types
@@ -210,6 +246,7 @@ export interface ForecastTimepoint {
 export interface WardForecast {
   ward_id: string;
   ward_name: string;
+  ward_name_marathi?: string;
   population: number;
   centroid: { lat: number; lon: number };
   baseline: { flood: number; heat: number };
@@ -238,6 +275,7 @@ export interface HistoricalEvent {
 export interface WardPrediction {
   ward_id: string;
   ward_name: string;
+  ward_name_marathi?: string;
   baseline_risk: number;
   predicted_risk: number;
   actually_affected: boolean;
@@ -264,6 +302,7 @@ export interface Alert {
   alert_id: string;
   ward_id: string;
   ward_name: string;
+  ward_name_marathi?: string;
   alert_type: string;
   priority: string;
   hazard: string;
@@ -276,6 +315,23 @@ export interface Alert {
   shelter_info: Record<string, unknown> | null;
   timestamp: string;
   channel: string;
+  evacuation_route?: {
+    recommended_shelter: {
+      name: string;
+      type: string;
+      capacity: number;
+      contact: string;
+      facilities: string[];
+      lat: number;
+      lon: number;
+      distance_km: number;
+      travel_time_min: number;
+    } | null;
+    route_coords: [number, number][];
+    route_safety: { safety_score: number; status: string; avoid_roads: string[]; safe_alternatives: string[] };
+    evacuation_urgency: string;
+    alternatives: { name: string; distance_km: number; travel_time_min: number; route_coords: [number, number][] }[];
+  } | null;
 }
 
 // ─── Evacuation Types ───────────────────────────────────────────────────────
@@ -298,6 +354,7 @@ export interface ActionItem {
   category: string;
   ward_id: string;
   ward_name: string;
+  ward_name_marathi?: string;
   title: string;
   description: string;
   justification: string;

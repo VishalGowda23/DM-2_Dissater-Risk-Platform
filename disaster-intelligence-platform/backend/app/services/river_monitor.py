@@ -167,7 +167,7 @@ class RiverMonitor:
                     level, station, trend
                 ),
                 "last_updated": datetime.now().isoformat(),
-                "data_source": "CWC Flood Monitoring / simulated",
+                "data_source": "CWC Flood Monitoring / weather-driven estimation",
             }
 
         return {
@@ -235,28 +235,33 @@ class RiverMonitor:
 
     def _simulate_level(self, station: RiverStation, weather_data_map: Dict = None) -> float:
         """
-        Simulate realistic river level based on weather conditions.
-        Uses rainfall data to estimate river response.
+        Estimate realistic river level based on weather conditions.
+        Uses rainfall data from nearby wards to estimate river response.
+        Deterministic — no random noise, only weather-driven.
         """
         base_level = station.normal_level_m
 
-        # Get rainfall from any available ward weather data
+        # Get rainfall from nearby ward weather data
         total_rainfall = 0
+        ward_count = 0
         if weather_data_map:
-            for ward_id, weather in weather_data_map.items():
-                if ward_id in station.nearby_wards:
+            for ward_id in station.nearby_wards:
+                if ward_id in weather_data_map:
+                    weather = weather_data_map[ward_id]
                     current = weather.get("current", {})
                     forecast = weather.get("forecast", {})
                     total_rainfall += current.get("rainfall_mm", 0) or 0
                     total_rainfall += (forecast.get("rainfall_48h_mm", 0) or 0) * 0.3
+                    ward_count += 1
 
-        # River level response to rainfall (lag + attenuation)
+        # River level response to rainfall (hydrological lag + attenuation)
         rainfall_contribution = total_rainfall * 0.015  # mm to meter estimate
 
-        # Add some natural variation
-        variation = random.uniform(-0.3, 0.3)
+        # Slight diurnal variation based on current hour (deterministic)
+        hour = datetime.now().hour
+        diurnal_offset = 0.1 * math.sin(2 * math.pi * hour / 24)  # ±0.1m
 
-        level = base_level + rainfall_contribution + variation
+        level = base_level + rainfall_contribution + diurnal_offset
         return max(station.normal_level_m * 0.5, min(level, station.danger_level_m * 1.2))
 
     def _get_flood_stage(self, level: float, station: RiverStation) -> str:

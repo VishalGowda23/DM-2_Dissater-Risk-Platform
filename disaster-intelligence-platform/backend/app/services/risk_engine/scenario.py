@@ -60,28 +60,34 @@ class ScenarioEngine:
 
     def apply_scenario(self, ward, params: ScenarioParameters,
                         weather_data: Optional[Dict] = None,
-                        baseline_flood: float = 50.0,
-                        baseline_heat: float = 50.0) -> Dict:
+                        structural_flood: float = 50.0,
+                        structural_heat: float = 50.0,
+                        baseline_event_flood: Optional[float] = None,
+                        baseline_event_heat: Optional[float] = None) -> Dict:
         """
-        Apply scenario parameters and recompute risk
-        Modifies weather/ward features in-place (copies), does NOT retrain
+        Apply scenario parameters and recompute risk.
+
+        structural_flood/heat: static ward vulnerability (0-100), used as INPUT
+            to the event risk formulas (baseline_vulnerability parameter).
+        baseline_event_flood/heat: pre-computed event risk with unmodified weather,
+            used as the COMPARISON baseline so that neutral sliders → delta = 0.
         """
-        # Deep copy weather data
+        # Deep copy weather data and apply scenario multipliers
         modified_weather = self._modify_weather(weather_data, params)
 
         # Modify ward features (create a proxy)
         modified_ward = self._modify_ward(ward, params)
 
-        # Recalculate flood event risk
+        # Recalculate flood event risk with scenario weather + modified ward
         flood_result = self.composite.calculate_flood_event_risk(
             modified_ward, modified_weather,
-            baseline_vulnerability=baseline_flood / 100
+            baseline_vulnerability=structural_flood / 100
         )
 
-        # Recalculate heat event risk
+        # Recalculate heat event risk with scenario weather + modified ward
         heat_result = self.composite.calculate_heat_event_risk(
             modified_ward, modified_weather,
-            baseline_vulnerability=baseline_heat / 100
+            baseline_vulnerability=structural_heat / 100
         )
 
         scenario_flood = flood_result["event_risk"]
@@ -107,13 +113,17 @@ class ScenarioEngine:
         scenario_flood = round(min(100, max(0, scenario_flood)), 2)
         scenario_heat = round(min(100, max(0, scenario_heat)), 2)
 
+        # Use baseline event risk for delta (falls back to structural if not provided)
+        compare_flood = baseline_event_flood if baseline_event_flood is not None else structural_flood
+        compare_heat = baseline_event_heat if baseline_event_heat is not None else structural_heat
+
         return {
             "ward_id": ward.ward_id,
             "ward_name": ward.name,
             "scenario_params": params.to_dict(),
             "baseline": {
-                "flood": baseline_flood,
-                "heat": baseline_heat,
+                "flood": round(compare_flood, 2),
+                "heat": round(compare_heat, 2),
             },
             "scenario_risk": {
                 "flood": scenario_flood,
@@ -121,8 +131,8 @@ class ScenarioEngine:
                 "combined": max(scenario_flood, scenario_heat),
             },
             "delta": {
-                "flood": round(scenario_flood - baseline_flood, 2),
-                "heat": round(scenario_heat - baseline_heat, 2),
+                "flood": round(scenario_flood - compare_flood, 2),
+                "heat": round(scenario_heat - compare_heat, 2),
             },
             "risk_category": self.composite.get_risk_category(max(scenario_flood, scenario_heat)),
         }
@@ -149,16 +159,35 @@ class ScenarioEngine:
         total_heat_delta = 0
         critical_count = 0
 
+        # Neutral params for computing baseline event risk
+        neutral_params = ScenarioParameters()
+
         for ward in all_wards_list:
-            # Get current baselines
-            baseline_flood = self.composite.calculate_flood_baseline(ward, all_wards_list)
-            baseline_heat = self.composite.calculate_heatwave_baseline(ward, all_wards_list)
+            # Structural vulnerability — used as INPUT factor in event risk formula
+            structural_flood = self.composite.calculate_flood_baseline(ward, all_wards_list)
+            structural_heat = self.composite.calculate_heatwave_baseline(ward, all_wards_list)
 
             ward_weather = weather_data.get(ward.ward_id) if weather_data else None
 
+            # Compute BASELINE event risk with UNMODIFIED weather/ward
+            # This ensures neutral sliders → delta = 0
+            baseline_weather = self._modify_weather(ward_weather, neutral_params)
+            baseline_flood_result = self.composite.calculate_flood_event_risk(
+                ward, baseline_weather,
+                baseline_vulnerability=structural_flood / 100
+            )
+            baseline_heat_result = self.composite.calculate_heat_event_risk(
+                ward, baseline_weather,
+                baseline_vulnerability=structural_heat / 100
+            )
+            baseline_event_flood = baseline_flood_result["event_risk"]
+            baseline_event_heat = baseline_heat_result["event_risk"]
+
+            # Compute SCENARIO event risk with MODIFIED weather/ward
             ward_result = self.apply_scenario(
                 ward, params, ward_weather,
-                baseline_flood, baseline_heat
+                structural_flood, structural_heat,
+                baseline_event_flood, baseline_event_heat,
             )
             results.append(ward_result)
 
@@ -216,10 +245,24 @@ class ScenarioEngine:
         if params.rain_multiplier != 1.0:
             c = modified["current"]
             f = modified["forecast"]
-            c["rainfall_mm"] = (c.get("rainfall_mm", 0) or 0) * params.rain_multiplier
-            f["rainfall_48h_mm"] = (f.get("rainfall_48h_mm", 0) or 0) * params.rain_multiplier
-            f["rainfall_7d_mm"] = (f.get("rainfall_7d_mm", 0) or 0) * params.rain_multiplier
-            f["max_rainfall_intensity_mm_h"] = (f.get("max_rainfall_intensity_mm_h", 0) or 0) * params.rain_multiplier
+
+            actual_rain = (c.get("rainfall_mm", 0) or 0)
+            actual_48h = (f.get("rainfall_48h_mm", 0) or 0)
+            actual_7d = (f.get("rainfall_7d_mm", 0) or 0)
+            actual_intensity = (f.get("max_rainfall_intensity_mm_h", 0) or 0)
+
+            if actual_rain < 2 and params.rain_multiplier > 1.0:
+                # Dry conditions: use representative base to make rain scenarios
+                # meaningful (prevents 3x * 0mm = 0mm in dry season)
+                c["rainfall_mm"] = 10 * params.rain_multiplier
+                f["rainfall_48h_mm"] = 30 * params.rain_multiplier
+                f["rainfall_7d_mm"] = 60 * params.rain_multiplier
+                f["max_rainfall_intensity_mm_h"] = 20 * params.rain_multiplier
+            else:
+                c["rainfall_mm"] = actual_rain * params.rain_multiplier
+                f["rainfall_48h_mm"] = actual_48h * params.rain_multiplier
+                f["rainfall_7d_mm"] = actual_7d * params.rain_multiplier
+                f["max_rainfall_intensity_mm_h"] = actual_intensity * params.rain_multiplier
 
         # Apply temperature increase
         if params.temperature_increase != 0:

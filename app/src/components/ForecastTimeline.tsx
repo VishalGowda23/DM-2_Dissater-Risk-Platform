@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Clock, TrendingUp, TrendingDown, AlertTriangle, CloudRain, Thermometer } from 'lucide-react';
 import { API_BASE_URL, getRiskColor, type WardForecast, type ForecastTimepoint } from '@/lib/types';
+import { useLang, wardName, trendKey, priorityKey } from '@/lib/i18n';
 
 interface Props {
     riskData: unknown[];
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function ForecastTimeline(_props: Props) {
+    const { t, lang } = useLang();
     const [forecasts, setForecasts] = useState<WardForecast[]>([]);
     const [selectedWard, setSelectedWard] = useState<WardForecast | null>(null);
     const [loading, setLoading] = useState(false);
@@ -59,40 +61,40 @@ export default function ForecastTimeline(_props: Props) {
     return (
         <div className="space-y-4">
             {/* Header Stats */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-white border-2 border-black p-4">
-                    <div className="text-xs font-bold uppercase text-gray-500">Total Wards</div>
+                    <div className="text-xs font-bold uppercase text-gray-500">{t('totalWardsLabel')}</div>
                     <div className="text-3xl font-black">{stats.total}</div>
                 </div>
                 <div className="bg-white border-2 border-red-500 p-4">
-                    <div className="text-xs font-bold uppercase text-red-500">Reaching Critical</div>
+                    <div className="text-xs font-bold uppercase text-red-500">{t('reachingCritical')}</div>
                     <div className="text-3xl font-black text-red-600">{stats.critical}</div>
                 </div>
                 <div className="bg-white border-2 border-orange-500 p-4">
-                    <div className="text-xs font-bold uppercase text-orange-500">Risk Rising</div>
+                    <div className="text-xs font-bold uppercase text-orange-500">{t('riskRising')}</div>
                     <div className="text-3xl font-black text-orange-600">{stats.rising}</div>
                 </div>
                 <div className={`border-2 p-4 ${dangerWindow ? 'bg-red-50 border-red-500' : 'bg-green-50 border-green-500'}`}>
-                    <div className="text-xs font-bold uppercase">Danger Window</div>
+                    <div className="text-xs font-bold uppercase">{t('dangerWindow')}</div>
                     <div className="text-sm font-black">
                         {dangerWindow
                             ? `T+${dangerWindow.start_hour}h → T+${dangerWindow.end_hour}h`
-                            : 'None detected'
+                            : t('noneDetected')
                         }
                     </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-12 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 {/* Ward Forecast List */}
-                <div className="col-span-4 bg-white border-2 border-black overflow-hidden" style={{ maxHeight: 'calc(100vh - 340px)' }}>
+                <div className="lg:col-span-4 bg-white border-2 border-black overflow-hidden" style={{ maxHeight: 'calc(100vh - 340px)' }}>
                     <div className="p-3 bg-black text-white flex items-center justify-between">
                         <h2 className="font-black uppercase tracking-wider text-sm">
                             <Clock className="w-4 h-4 inline mr-2" />
-                            48h Forecasts
+                            {t('forecastListTitle')}
                         </h2>
                         <button onClick={fetchForecast} className="text-xs border border-white px-2 py-1 hover:bg-white hover:text-black">
-                            {loading ? '...' : 'Refresh'}
+                            {loading ? '...' : t('refresh')}
                         </button>
                     </div>
                     <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 400px)' }}>
@@ -104,22 +106,22 @@ export default function ForecastTimeline(_props: Props) {
                                     }`}
                             >
                                 <div className="flex items-center justify-between mb-1">
-                                    <span className="font-bold text-sm">{fc.ward_name}</span>
+                                    <span className="font-bold text-sm">{wardName(fc, lang)}</span>
                                     <span className={`text-xs px-2 py-0.5 font-bold ${getAlertBadge(fc.max_alert)}`}>
-                                        {fc.max_alert.toUpperCase()}
+                                        {t(priorityKey(fc.max_alert))}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs text-gray-500">
                                     <span className="flex items-center gap-1">
-                                        Peak: <span className="font-bold" style={{ color: getRiskColor(fc.peak.risk) }}>{fc.peak.risk}%</span> at T+{fc.peak.hour}h
+                                        {t('peakAtLabel')} <span className="font-bold" style={{ color: getRiskColor(fc.peak.risk) }}>{fc.peak.risk}%</span> {t('atLabel')} T+{fc.peak.hour}h
                                     </span>
                                     <span className="flex items-center gap-1">
-                                        {getTrendIcon(fc.trend)} {fc.trend}
+                                        {getTrendIcon(fc.trend)} {t(trendKey(fc.trend))}
                                     </span>
                                 </div>
                                 {fc.time_to_critical !== null && (
                                     <div className="text-xs text-red-600 font-bold mt-1">
-                                        ⚠ Critical in {fc.time_to_critical}h
+                                        ⚠ {t('criticalInHours')} {fc.time_to_critical}h
                                     </div>
                                 )}
                             </div>
@@ -128,28 +130,28 @@ export default function ForecastTimeline(_props: Props) {
                 </div>
 
                 {/* Chart + Details */}
-                <div className="col-span-8 space-y-4">
+                <div className="lg:col-span-8 space-y-4">
                     {selectedWard ? (
                         <>
                             {/* Ward Header */}
                             <div className="bg-white border-2 border-black p-4">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <h3 className="text-xl font-black">{selectedWard.ward_name}</h3>
+                                        <h3 className="text-xl font-black">{wardName(selectedWard, lang)}</h3>
                                         <div className="text-sm text-gray-500">
-                                            Population: {selectedWard.population?.toLocaleString()} |
-                                            Baseline Flood: {selectedWard.baseline.flood}% |
-                                            Baseline Heat: {selectedWard.baseline.heat}%
+                                            {t('populationStat')}: {selectedWard.population?.toLocaleString()} |
+                                            {t('baselineFloodStat')}: {selectedWard.baseline.flood}% |
+                                            {t('baselineHeatStat')}: {selectedWard.baseline.heat}%
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-sm text-gray-500">Peak Risk</div>
+                                        <div className="text-sm text-gray-500">{t('peakRisk')}</div>
                                         <div className="text-3xl font-black" style={{ color: getRiskColor(selectedWard.peak.risk) }}>
                                             {selectedWard.peak.risk}%
                                         </div>
                                         <div className="text-xs text-gray-500">
                                             {selectedWard.peak.hazard === 'flood' ? <CloudRain className="w-3 h-3 inline" /> : <Thermometer className="w-3 h-3 inline" />}
-                                            {' '}at T+{selectedWard.peak.hour}h
+                                            {' '}{t('atLabel')} T+{selectedWard.peak.hour}h
                                         </div>
                                     </div>
                                 </div>
@@ -157,7 +159,7 @@ export default function ForecastTimeline(_props: Props) {
 
                             {/* Timeline Chart */}
                             <div className="bg-white border-2 border-black p-4" style={{ height: 350 }}>
-                                <h4 className="font-black text-sm uppercase mb-2">Risk Timeline (48 Hours)</h4>
+                                <h4 className="font-black text-sm uppercase mb-2">{t('riskTimeline')}</h4>
                                 <ResponsiveContainer width="100%" height="90%">
                                     <AreaChart data={selectedWard.timeline}>
                                         <defs>
@@ -177,17 +179,17 @@ export default function ForecastTimeline(_props: Props) {
                                             formatter={(value: number, name: string) => [`${value}%`, name]}
                                             labelFormatter={(h: number) => `T+${h} hours`}
                                         />
-                                        <ReferenceLine y={75} stroke="#ef4444" strokeDasharray="5 5" label="Critical" />
-                                        <ReferenceLine y={60} stroke="#f97316" strokeDasharray="5 5" label="High" />
-                                        <Area type="monotone" dataKey="flood_risk" stroke="#3b82f6" fill="url(#floodGrad)" name="Flood Risk" strokeWidth={2} />
-                                        <Area type="monotone" dataKey="heat_risk" stroke="#ef4444" fill="url(#heatGrad)" name="Heat Risk" strokeWidth={2} />
+                                        <ReferenceLine y={75} stroke="#ef4444" strokeDasharray="5 5" label={t('criticalLine')} />
+                                        <ReferenceLine y={60} stroke="#f97316" strokeDasharray="5 5" label={t('highLine')} />
+                                        <Area type="monotone" dataKey="flood_risk" stroke="#3b82f6" fill="url(#floodGrad)" name={t('floodRiskName')} strokeWidth={2} />
+                                        <Area type="monotone" dataKey="heat_risk" stroke="#ef4444" fill="url(#heatGrad)" name={t('heatRiskName')} strokeWidth={2} />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
 
                             {/* Hourly Breakdown */}
                             <div className="bg-white border-2 border-black p-4 overflow-x-auto">
-                                <h4 className="font-black text-sm uppercase mb-2">Hourly Detail</h4>
+                                <h4 className="font-black text-sm uppercase mb-2">{t('hourlyDetail')}</h4>
                                 <div className="flex gap-2">
                                     {selectedWard.timeline.map((tp: ForecastTimepoint) => (
                                         <div key={tp.hour} className="flex-shrink-0 text-center p-2 border border-gray-200 min-w-[80px]"
@@ -210,7 +212,7 @@ export default function ForecastTimeline(_props: Props) {
                     ) : (
                         <div className="bg-white border-2 border-black p-8 text-center text-gray-500">
                             <AlertTriangle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                            <p className="font-bold">Select a ward to view forecast timeline</p>
+                            <p className="font-bold">{t('selectWardForecast')}</p>
                         </div>
                     )}
                 </div>
